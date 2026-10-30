@@ -1,0 +1,59 @@
+# LifeOS stack: PostgreSQL + API/web + background worker (+ optional local LLM).
+#   cp .env.example .env   # then set POSTGRES_PASSWORD
+#   docker compose up -d --build
+#   docker compose --profile ai up -d   # also start Ollama, then: docker compose exec ollama ollama pull llama3.2
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: lifeos
+      POSTGRES_USER: lifeos
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lifeos -d lifeos"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    image: lifeos:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://lifeos:${POSTGRES_PASSWORD}@db:5432/lifeos
+      OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
+      RUN_WORKER_IN_API: "false"
+    ports:
+      - "${APP_PORT:-8000}:8000"
+
+  worker:
+    image: lifeos:latest
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://lifeos:${POSTGRES_PASSWORD}@db:5432/lifeos
+    command: ["python", "-m", "app.worker"]
+    healthcheck:
+      disable: true
+
+  ollama:
+    image: ollama/ollama:0.40.11
+    profiles: ["ai"]
+    restart: unless-stopped
+    volumes:
+      - ollama:/root/.ollama
+
+volumes:
+  pgdata:
+  ollama:
