@@ -84,6 +84,132 @@ dialog::backdrop {
   background: rgb(0 0 0 / 0.45);
 }
 
+/* ---------------------------------------------------------------- ambient light & scenes */
+/* Registered colour properties can be transitioned, so the light fades between moods. */
+@property --glow-a {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #22d3ee;
+}
+@property --glow-b {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #38bdf8;
+}
+@property --glow-c {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #2dd4bf;
+}
+
+.ambient {
+  --blob-opacity: 0.34;
+  transition:
+    --glow-a 1.8s ease,
+    --glow-b 1.8s ease,
+    --glow-c 1.8s ease;
+}
+.dark .ambient {
+  --blob-opacity: 0.42;
+}
+.ambient-vivid {
+  --blob-opacity: 0.5;
+}
+.dark .ambient-vivid {
+  --blob-opacity: 0.62;
+}
+
+.ambient-blob {
+  position: absolute;
+  width: 70vmax;
+  height: 70vmax;
+  border-radius: 9999px;
+  opacity: var(--blob-opacity);
+  will-change: transform;
+}
+.ambient-blob-a {
+  top: -32vmax;
+  left: -24vmax;
+  background: radial-gradient(closest-side, var(--glow-a), transparent);
+  animation: drift-a 34s ease-in-out infinite alternate;
+}
+.ambient-blob-b {
+  right: -30vmax;
+  bottom: -36vmax;
+  background: radial-gradient(closest-side, var(--glow-b), transparent);
+  animation: drift-b 41s ease-in-out infinite alternate;
+}
+.ambient-blob-c {
+  top: 25%;
+  left: 45%;
+  width: 46vmax;
+  height: 46vmax;
+  opacity: calc(var(--blob-opacity) * 0.7);
+  background: radial-gradient(closest-side, var(--glow-c), transparent);
+  animation: drift-c 47s ease-in-out infinite alternate;
+}
+
+@keyframes drift-a {
+  to {
+    transform: translate(18vw, 14vh) scale(1.15);
+  }
+}
+@keyframes drift-b {
+  to {
+    transform: translate(-16vw, -12vh) scale(0.9);
+  }
+}
+@keyframes drift-c {
+  to {
+    transform: translate(-22vw, 10vh) scale(1.2);
+  }
+}
+
+.scene-image {
+  animation: scene-zoom 70s ease-in-out infinite alternate;
+  transform-origin: 60% 40%;
+}
+@keyframes scene-zoom {
+  to {
+    transform: scale(1.08);
+  }
+}
+.scene-veil {
+  background: color-mix(in srgb, var(--color-canvas) 62%, transparent);
+}
+.dark .scene-veil {
+  background: color-mix(in srgb, var(--color-canvas) 50%, transparent);
+}
+.scene-veil-vivid {
+  background: color-mix(in srgb, var(--color-canvas) 38%, transparent);
+}
+.dark .scene-veil-vivid {
+  background: color-mix(in srgb, var(--color-canvas) 30%, transparent);
+}
+.ambient-tint {
+  background: radial-gradient(60vmax 60vmax at 85% 10%, var(--glow-a), transparent);
+  opacity: 0.22;
+  transition: --glow-a 1.8s ease;
+}
+
+/* Frosted glass panels so content stays readable over the backdrop. */
+.has-backdrop .card,
+.has-backdrop .glass {
+  background: color-mix(in srgb, var(--color-surface) 74%, transparent);
+  backdrop-filter: blur(18px) saturate(1.25);
+  -webkit-backdrop-filter: blur(18px) saturate(1.25);
+}
+.has-backdrop body {
+  background: var(--color-canvas);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-blob,
+  .scene-image {
+    animation: none !important;
+  }
+}
+
 @utility btn {
   @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60;
 }

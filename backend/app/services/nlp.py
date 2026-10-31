@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
 
 from app.models import Priority
+from app.services.recurrence import first_due
 from app.services.timeutil import end_of_local_day, local_to_utc, now_local
 
 MAX_TASKS_PER_REQUEST = 20
@@ -63,11 +64,15 @@ _PRIORITY_PATTERNS: list[tuple[re.Pattern[str], Priority]] = [
 ]
 _CATEGORY = re.compile(r"(?<![\w&])#([\w-]{1,50})", re.UNICODE)
 _REMIND_PREFIX = re.compile(r"^\s*(?:please\s+)?remind me\s+(?:to\s+)?", re.I)
+_DAY_RE = r"(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*"
 _RECURRENCE = re.compile(
-    r"\bevery\s+(?:day|week|month|year|morning|evening|weekday|(?:%s))(?:\s+(?:morning|afternoon|evening))?\b"
-    % "|".join(_WEEKDAYS),
+    r"\b(?:every\s+(?:(?P<n>\d{1,3}|other)\s+)?(?P<unit>day|week|month|year|weekday|morning|evening|night)s?"
+    r"|(?P<adv>daily|weekly|monthly|yearly|annually|nightly)"
+    rf"|every\s+(?P<days>{_DAY_RE}(?:\s*(?:,|and|&)\s*{_DAY_RE})*))\b"
+    r"(?:\s+(?P<part>morning|afternoon|evening))?",
     re.I,
 )
+_RRULE_DAYS = {"mon": "MO", "tue": "TU", "wed": "WE", "thu": "TH", "fri": "FR", "sat": "SA", "sun": "SU"}
 _ESTIMATE = re.compile(r"\bfor\s+(\d{1,3})\s*(min(?:ute)?s?|h(?:ou)?rs?)\b", re.I)
 _RELATIVE = re.compile(r"\bin\s+(\d{1,3}|an?|one|two|three)\s+(min(?:ute)?s?|h(?:ou)?rs?|days?|weeks?)\b", re.I)
 _DAY_AFTER_TOMORROW = re.compile(_PREFIX + r"\bday after tomorrow\b", re.I)
@@ -106,6 +111,7 @@ class ParsedFields:
     due_has_time: bool = False
     remind_at: datetime | None = None
     estimated_minutes: int | None = None
+    recurrence: str | None = None
     warnings: list[str] = field(default_factory=list)
 
 
@@ -235,6 +241,30 @@ def _clean_title(raw: str, fallback: str) -> str:
     return title[:1].upper() + title[1:]
 
 
+_PART_TIMES = {"morning": time(9, 0), "afternoon": time(14, 0), "evening": time(18, 0), "night": time(21, 0)}
+_FREQ_WORDS = {
+    "day": "DAILY", "daily": "DAILY", "week": "WEEKLY", "weekly": "WEEKLY", "month": "MONTHLY",
+    "monthly": "MONTHLY", "year": "YEARLY", "yearly": "YEARLY", "annually": "YEARLY",
+}  # fmt: skip
+
+
+def _recurrence_from(m: re.Match[str]) -> tuple[str, time | None]:
+    """Map a matched "every …" phrase to an RRULE and an implied time of day."""
+    at = _PART_TIMES.get((m.group("part") or "").lower())
+    if m.group("days"):
+        codes = [_RRULE_DAYS[d[:3].lower()] for d in re.findall(_DAY_RE, m.group("days"), re.I)]
+        return "FREQ=WEEKLY;BYDAY=" + ",".join(dict.fromkeys(codes)), at
+    word = (m.group("unit") or m.group("adv") or "").lower()
+    raw_n = (m.group("n") or "1").lower()
+    n = 2 if raw_n == "other" else max(1, min(365, int(raw_n)))
+    interval = f";INTERVAL={n}" if n > 1 else ""
+    if word in {"morning", "evening", "night", "nightly"}:
+        return "FREQ=DAILY" + interval, at or _PART_TIMES["night" if word == "nightly" else word]
+    if word == "weekday":
+        return "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR", at
+    return f"FREQ={_FREQ_WORDS[word]}{interval}", at
+
+
 def parse_line(line: str, tz: str, now: datetime | None = None) -> ParsedFields:
     now = now or datetime.now(UTC)
     local_now = now_local(tz, now)
@@ -248,9 +278,10 @@ def parse_line(line: str, tz: str, now: datetime | None = None) -> ParsedFields:
         t.consume(m)
         reminder_requested = True
 
+    rule_time: time | None = None
     if m := t.search(_RECURRENCE):
         t.consume(m)
-        result.warnings.append("Recurring tasks are not supported yet; a single task was created.")
+        result.recurrence, rule_time = _recurrence_from(m)
 
     for pattern, priority in _PRIORITY_PATTERNS:
         if m := t.search(pattern):
@@ -292,8 +323,11 @@ def parse_line(line: str, tz: str, now: datetime | None = None) -> ParsedFields:
         ):
             t.consume(m)
             at = _DAYPART_TIMES[m.group(1).lower()]
-        at = at or implied_time
-        if day is None and at is not None:
+        at = at or implied_time or rule_time
+        if result.recurrence and day is None:
+            # "every monday 9am": the first occurrence from now on.
+            due_at, has_time = first_due(result.recurrence, at, tz, now), at is not None
+        elif day is None and at is not None:
             day = today if local_to_utc(today, at, tz) > now else today + timedelta(days=1)
         if day is not None:
             if at is not None:

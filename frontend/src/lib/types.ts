@@ -30,6 +30,9 @@ export interface Task {
   completed_at: string | null
   estimated_minutes: number | null
   goal_id: string | null
+  /** RRULE subset, e.g. "FREQ=WEEKLY;BYDAY=MO"; completing the task schedules the next one. */
+  recurrence: string | null
+  series_id: string | null
   source: string
   version: number
   deleted_at: string | null
@@ -52,6 +55,7 @@ export type TaskFields = Partial<
     | 'remind_at'
     | 'estimated_minutes'
     | 'goal_id'
+    | 'recurrence'
   >
 >
 
@@ -104,6 +108,7 @@ export interface ParsedTask {
   due_at: string | null
   due_has_time: boolean
   remind_at: string | null
+  recurrence: string | null
   duplicate_of: Task | null
 }
 

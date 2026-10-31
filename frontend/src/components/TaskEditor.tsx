@@ -1,9 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
 import { type FormEvent, useEffect, useId, useMemo, useState } from 'react'
 import { useLocalTasks, useSyncEngine } from '../app/SyncContext'
+import { useAmbient } from '../app/backdrop'
+import { focusMood } from '../lib/mood'
 import { request } from '../lib/api'
 import { PRIORITIES, PRIORITY_LABEL, categoriesOf } from '../lib/tasks'
-import { dateKey, endOfLocalDay, timeKey, zonedToUtc } from '../lib/time'
+import { type RepeatChoice, type RepeatUnit, WEEKDAY_CODES, choiceFor, parseRule, ruleFor, weekdayCode } from '../lib/recurrence'
+import { dateKey, endOfLocalDay, formatDayKey, timeKey, zonedToUtc } from '../lib/time'
 import type { Goal, Priority, Task, TaskFields, TaskStatus } from '../lib/types'
 import { Dialog } from './Dialog'
 import { useToast } from './Toast'
@@ -31,6 +34,10 @@ interface FormState {
   customReminder: string
   estimate: string
   goalId: string
+  repeat: RepeatChoice
+  repeatInterval: string
+  repeatUnit: RepeatUnit
+  repeatDays: string[]
 }
 
 function initialState(task: Task | null, tz: string, defaults?: Partial<TaskFields>): FormState {
@@ -59,6 +66,7 @@ function initialState(task: Task | null, tz: string, defaults?: Partial<TaskFiel
     customReminder,
     estimate: src.estimated_minutes ? String(src.estimated_minutes) : '',
     goalId: src.goal_id ?? '',
+    ...repeatState(src.recurrence ?? null, due ? dateKey(due, tz) : ''),
   }
 }
 
@@ -71,6 +79,9 @@ export function toFields(f: FormState, tz: string): { fields?: TaskFields; error
   if (f.category.trim().length > 50) return { error: 'Category must be 50 characters or fewer.' }
   if (f.dueTime && !f.dueDate) return { error: 'Choose a due date for the due time.' }
   const estimate = f.estimate ? Number(f.estimate) : null
+  if (f.repeat !== 'none' && !f.dueDate) return { error: 'Choose a due date for a repeating task.' }
+  if (f.repeat === 'custom' && f.repeatUnit === 'WEEKLY' && f.repeatDays.length === 0)
+    return { error: 'Pick at least one weekday to repeat on.' }
   if (estimate !== null && (!Number.isInteger(estimate) || estimate < 1 || estimate > 1440))
     return { error: 'Estimate must be a whole number of minutes between 1 and 1440.' }
 
@@ -98,6 +109,11 @@ export function toFields(f: FormState, tz: string): { fields?: TaskFields; error
       remind_at: remindAt,
       estimated_minutes: estimate,
       goal_id: f.goalId || null,
+      recurrence: ruleFor(f.repeat, f.dueDate, {
+        interval: Number(f.repeatInterval) || 1,
+        unit: f.repeatUnit,
+        days: f.repeatDays,
+      }),
     },
   }
 }
@@ -112,6 +128,13 @@ export function TaskEditor({ open, task, tz, defaults, onClose }: Props) {
   const id = useId()
   const goals = useQuery({ queryKey: ['goals'], queryFn: () => request<Goal[]>('/goals'), enabled: open })
   const categories = useMemo(() => categoriesOf(tasks), [tasks])
+  const { setFocus } = useAmbient()
+
+  // The ambient light follows the priority of the task being edited.
+  useEffect(() => {
+    setFocus(open ? focusMood(form.priority) : null)
+  }, [open, form.priority, setFocus])
+  useEffect(() => () => setFocus(null), [setFocus])
 
   useEffect(() => {
     if (open) {
@@ -289,6 +312,60 @@ export function TaskEditor({ open, task, tz, defaults, onClose }: Props) {
             <option value="custom">Custom…</option>
           </select>
         </div>
+        <div className="sm:col-span-2">
+          <label className="label" htmlFor={f('repeat')}>
+            Repeat
+          </label>
+          <select id={f('repeat')} className="input" value={form.repeat} onChange={(e) => set('repeat', e.target.value as RepeatChoice)}>
+            <option value="none">Doesn't repeat</option>
+            <option value="daily">Every day</option>
+            <option value="weekdays">Every weekday (Mon–Fri)</option>
+            <option value="weekly">Every week{form.dueDate ? ` on ${formatDayKey(form.dueDate, { weekday: 'long' })}` : ''}</option>
+            <option value="biweekly">Every 2 weeks{form.dueDate ? ` on ${formatDayKey(form.dueDate, { weekday: 'long' })}` : ''}</option>
+            <option value="monthly">Every month{form.dueDate ? ` on day ${Number(form.dueDate.slice(8))}` : ''}</option>
+            <option value="yearly">Every year</option>
+            <option value="custom">Custom…</option>
+          </select>
+          {form.repeat === 'custom' ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className="text-sm text-ink-2">Every</span>
+              <input
+                aria-label="Repeat interval"
+                type="number"
+                min={1}
+                max={365}
+                className="input w-20"
+                value={form.repeatInterval}
+                onChange={(e) => set('repeatInterval', e.target.value)}
+              />
+              <select aria-label="Repeat unit" className="input w-auto" value={form.repeatUnit} onChange={(e) => set('repeatUnit', e.target.value as RepeatUnit)}>
+                <option value="DAILY">day(s)</option>
+                <option value="WEEKLY">week(s)</option>
+                <option value="MONTHLY">month(s)</option>
+              </select>
+              {form.repeatUnit === 'WEEKLY' ? (
+                <div role="group" aria-label="Repeat on" className="flex flex-wrap gap-1">
+                  {WEEKDAY_CODES.map((code) => (
+                    <button
+                      key={code}
+                      type="button"
+                      aria-pressed={form.repeatDays.includes(code)}
+                      onClick={() =>
+                        set('repeatDays', form.repeatDays.includes(code) ? form.repeatDays.filter((d) => d !== code) : [...form.repeatDays, code])
+                      }
+                      className={`size-10 rounded-full text-xs font-medium ${form.repeatDays.includes(code) ? 'bg-accent text-on-accent' : 'border border-border text-ink-2'}`}
+                    >
+                      {code.charAt(0) + code.charAt(1).toLowerCase()}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          {form.repeat !== 'none' ? (
+            <p className="mt-1 text-xs text-ink-3">When you complete it, the next one is created automatically.</p>
+          ) : null}
+        </div>
         {form.reminder === 'custom' ? (
           <div>
             <label className="label" htmlFor={f('custom')}>
@@ -306,4 +383,15 @@ export function TaskEditor({ open, task, tz, defaults, onClose }: Props) {
       </form>
     </Dialog>
   )
+}
+
+function repeatState(rule: string | null, dueDate: string): Pick<FormState, 'repeat' | 'repeatInterval' | 'repeatUnit' | 'repeatDays'> {
+  const parsed = rule ? parseRule(rule) : {}
+  const unit = (['DAILY', 'WEEKLY', 'MONTHLY'] as RepeatUnit[]).includes(parsed.FREQ as RepeatUnit) ? (parsed.FREQ as RepeatUnit) : 'WEEKLY'
+  return {
+    repeat: choiceFor(rule, dueDate),
+    repeatInterval: parsed.INTERVAL ?? '1',
+    repeatUnit: unit,
+    repeatDays: parsed.BYDAY ? parsed.BYDAY.split(',').map((d) => d.slice(-2)) : dueDate ? [weekdayCode(dueDate)] : [],
+  }
 }

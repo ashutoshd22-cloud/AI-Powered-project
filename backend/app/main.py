@@ -14,7 +14,7 @@ from sqlalchemy import text
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app import db as database
-from app.api import account, ai, auth, calendar, goals, misc, sync, tasks
+from app.api import account, ai, auth, calendar, goals, integrations, misc, push, sync, tasks
 from app.config import get_settings
 from app.logging_setup import configure_logging
 
@@ -36,9 +36,30 @@ class _RedactFeedTokens(logging.Filter):
         return True
 
 
+def _warn_if_schema_outdated() -> None:
+    """Log loudly when the database is behind the code (forgotten `alembic upgrade head`)."""
+    try:
+        from alembic.config import Config
+        from alembic.runtime.migration import MigrationContext
+        from alembic.script import ScriptDirectory
+
+        script = ScriptDirectory.from_config(Config(str(Path(__file__).resolve().parent.parent / "alembic.ini")))
+        with database.engine.connect() as conn:
+            current = MigrationContext.configure(conn).get_current_revision()
+        if current is not None and current != script.get_current_head():
+            log.error(
+                "Database schema is at revision %s but the code expects %s. Run `alembic upgrade head` in backend/.",
+                current,
+                script.get_current_head(),
+            )
+    except Exception:  # never block startup on the check itself
+        log.debug("schema version check skipped", exc_info=True)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
+    _warn_if_schema_outdated()
     stop = threading.Event()
     worker: threading.Thread | None = None
     if settings.run_worker_in_api:
@@ -124,7 +145,7 @@ def create_app() -> FastAPI:
         return JSONResponse(status_code=500, content={"detail": "An unexpected error occurred. Please try again."})
 
     api = APIRouter(prefix=API_PREFIX)
-    for module in (auth, tasks, goals, misc, ai, calendar, account, sync):
+    for module in (auth, tasks, goals, misc, ai, calendar, account, sync, push, integrations):
         api.include_router(module.router)
     app.include_router(api)
 

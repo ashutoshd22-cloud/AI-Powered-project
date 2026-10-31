@@ -2,6 +2,7 @@ import { type FormEvent, useId, useState } from 'react'
 import { useLocalTasks, useSyncEngine } from '../app/SyncContext'
 import { NetworkError, errorMessage, request } from '../lib/api'
 import { useSpeech } from '../lib/speech'
+import { describeRule } from '../lib/recurrence'
 import { PRIORITY_LABEL, findOpenDuplicate } from '../lib/tasks'
 import { describeDue } from '../lib/time'
 import type { ParseResult, ParsedTask, TaskFields } from '../lib/types'
@@ -92,6 +93,7 @@ export function QuickAdd({ tz, defaults }: Props) {
         category: item.category,
         due_at: item.due_at,
         due_has_time: item.due_has_time,
+        recurrence: item.recurrence,
       }
       // Leaving remind_at out lets the server apply the user's default reminder.
       if (item.remind_at) fields.remind_at = item.remind_at
@@ -162,6 +164,7 @@ export function QuickAdd({ tz, defaults }: Props) {
                       item.priority !== 'medium' ? PRIORITY_LABEL[item.priority] : null,
                       item.category ? `#${item.category}` : null,
                       item.remind_at ? 'Reminder' : null,
+                      item.recurrence ? `↻ ${describeRule(item.recurrence)}` : null,
                     ]
                       .filter(Boolean)
                       .join(' · ')}

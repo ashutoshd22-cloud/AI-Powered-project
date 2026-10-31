@@ -118,6 +118,7 @@ def fields_from_parsed(item: nlp.ParsedFields) -> dict[str, Any]:
         "due_at": item.due_at,
         "due_has_time": item.due_has_time,
         "estimated_minutes": item.estimated_minutes,
+        "recurrence": item.recurrence,
     }
     if item.remind_at is not None:
         fields["remind_at"] = item.remind_at

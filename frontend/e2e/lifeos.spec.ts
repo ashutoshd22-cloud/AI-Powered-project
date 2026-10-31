@@ -113,3 +113,33 @@ test('export data and delete the account', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible()
   expect((await page.request.get('/api/v1/auth/me')).status()).toBe(401)
 })
+
+test('repeating tasks: natural language, completion schedules the next one', async ({ page }) => {
+  await register(page)
+  await quickAdd(page, 'Water plants every 3 days')
+  await expect(page.getByText(/↻ Every 3 days/)).toBeVisible()
+  await page.getByRole('button', { name: 'Add 1 task' }).click()
+  await waitForSynced(page)
+  await page.getByRole('checkbox', { name: 'Mark as done: Water plants' }).first().click()
+  await expect(page.getByText(/The next one is scheduled/)).toBeVisible()
+  await waitForSynced(page)
+  await page.goto('/tasks')
+  // The completed occurrence is hidden (open filter); the next one is there, still repeating.
+  await expect(page.getByRole('checkbox', { name: 'Mark as done: Water plants' })).toHaveCount(1, { timeout: 15_000 })
+  await expect(page.getByText('Every 3 days').first()).toBeVisible()
+})
+
+test('appearance: ambient light reacts to tasks and scenes can be chosen', async ({ page }) => {
+  await register(page)
+  await expect(page.locator('[data-mood]')).toHaveAttribute('data-mood', 'calm')
+  await quickAdd(page, 'Fix production bug urgent in 2 hours')
+  await page.getByRole('button', { name: 'Add 1 task' }).click()
+  await expect(page.locator('[data-mood]')).toHaveAttribute('data-mood', 'urgent')
+
+  await page.goto('/settings')
+  await page.getByRole('radio', { name: /^Nebula/ }).click()
+  await page.goto('/')
+  await expect(page.locator('[data-scene="nebula"] img')).toHaveAttribute('src', '/scenes/nebula.svg')
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)
+  expect(overflow).toBe(false)
+})

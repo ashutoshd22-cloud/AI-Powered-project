@@ -11,7 +11,7 @@ import time
 
 from app.db import SessionLocal
 from app.logging_setup import configure_logging
-from app.services import reminders
+from app.services import google_calendar, reminders
 
 log = logging.getLogger("lifeos.worker")
 
@@ -22,6 +22,7 @@ def run_cycle(include_purge: bool) -> None:
     for name, job in (
         ("reminders", reminders.dispatch_due_reminders),
         ("digests", reminders.dispatch_daily_digests),
+        ("google-calendar", google_calendar.sync_due),
     ):
         db = SessionLocal()
         try:

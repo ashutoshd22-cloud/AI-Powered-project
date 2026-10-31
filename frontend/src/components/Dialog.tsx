@@ -35,7 +35,7 @@ export function Dialog({ open, onClose, title, children, footer, size = 'md' }: 
       onClick={(e) => {
         if (e.target === ref.current) onClose()
       }}
-      className={`m-0 mt-auto max-h-[92dvh] w-full max-w-none rounded-t-2xl border border-border bg-surface p-0 text-ink shadow-xl sm:m-auto sm:rounded-2xl ${width}`}
+      className={`m-0 mt-auto max-h-[92dvh] w-full max-w-none overflow-hidden rounded-t-2xl border border-border bg-surface p-0 text-ink shadow-xl sm:m-auto sm:rounded-2xl ${width}`}
     >
       {open ? (
         <div className="flex max-h-[92dvh] flex-col">

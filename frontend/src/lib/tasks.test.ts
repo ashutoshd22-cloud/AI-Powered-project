@@ -7,7 +7,7 @@ function task(partial: Partial<Task>): Task {
   return {
     id: crypto.randomUUID(), title: 't', description: '', priority: 'medium', category: null, status: 'todo', due_at: null,
     due_has_time: false, scheduled_for: null, remind_at: null, reminder_sent_at: null, completed_at: null,
-    estimated_minutes: null, goal_id: null, source: 'manual', version: 1, deleted_at: null,
+    estimated_minutes: null, goal_id: null, recurrence: null, series_id: null, source: 'manual', version: 1, deleted_at: null,
     created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z', ...partial,
   }
 }
@@ -51,7 +51,7 @@ describe('planning buckets', () => {
 describe('task editor validation', () => {
   const base = {
     title: 'Ship it', description: '', priority: 'medium' as const, category: '', status: 'todo' as const, dueDate: '', dueTime: '',
-    scheduledFor: '', reminder: 'none' as const, customReminder: '', estimate: '', goalId: '',
+    scheduledFor: '', reminder: 'none' as const, customReminder: '', estimate: '', goalId: '', repeat: 'none' as const, repeatInterval: '1', repeatUnit: 'WEEKLY' as const, repeatDays: [] as string[],
   }
 
   it('rejects invalid input with a helpful message', () => {

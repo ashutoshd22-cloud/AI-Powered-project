@@ -37,6 +37,17 @@ def _check_reasonable_datetime(value: datetime | None) -> datetime | None:
     return value
 
 
+def _check_recurrence(value: str | None) -> str | None:
+    if value is None or not value.strip():
+        return None
+    from app.services.recurrence import RecurrenceError, normalise
+
+    try:
+        return normalise(value)
+    except RecurrenceError as exc:
+        raise ValueError(str(exc)) from exc
+
+
 def _check_reasonable_date(value: date | None) -> date | None:
     if value is not None and not (1970 <= value.year <= 2200):
         raise ValueError("Date is out of the supported range (1970-2200)")
@@ -48,6 +59,7 @@ Title = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, ma
 Description = Annotated[str, StringConstraints(max_length=5000)]
 OptDateTime = Annotated[AwareDatetime | None, AfterValidator(_check_reasonable_datetime)]
 OptDate = Annotated[date | None, AfterValidator(_check_reasonable_date)]
+Recurrence = Annotated[str | None, StringConstraints(max_length=200), AfterValidator(_check_recurrence)]
 Password = Annotated[str, StringConstraints(min_length=10, max_length=128)]
 
 
@@ -129,6 +141,7 @@ class TaskFields(BaseModel):
     remind_at: OptDateTime = None
     estimated_minutes: Annotated[int, Field(ge=1, le=1440)] | None = None
     goal_id: uuid.UUID | None = None
+    recurrence: Recurrence = Field(default=None, description="Repeat rule, e.g. FREQ=WEEKLY;BYDAY=MO")
 
 
 class TaskCreate(TaskFields):
@@ -159,6 +172,8 @@ class TaskOut(ORMModel):
     completed_at: datetime | None
     estimated_minutes: int | None
     goal_id: uuid.UUID | None
+    recurrence: str | None = None
+    series_id: uuid.UUID | None = None
     source: str
     version: int
     deleted_at: datetime | None
@@ -250,6 +265,7 @@ class ParsedTask(BaseModel):
     due_has_time: bool = False
     scheduled_for: date | None = None
     remind_at: datetime | None = None
+    recurrence: str | None = None
     duplicate_of: TaskOut | None = None
 
 

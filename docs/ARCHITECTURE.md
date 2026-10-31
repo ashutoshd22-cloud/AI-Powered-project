@@ -101,6 +101,13 @@ flowchart LR
 | `notifications` | id, user_id, task_id (SET NULL), kind, title, body, dedupe_key, read_at, created_at | unique(user_id, dedupe_key), idx(user_id, read_at) |
 | `activity_logs` | id (bigint), user_id, action, entity_type, entity_id, summary, created_at | idx(user_id, created_at) |
 | `sync_ops` | user_id, op_id, status, created_at | pk(user_id, op_id) |
+| `push_subscriptions` | id, user_id, endpoint, p256dh, auth, last_success_at | unique(endpoint), idx(user_id) |
+| `google_integrations` | user_id (pk), refresh/access token (Fernet-encrypted), calendar_id, sync_token, status, last_error | — |
+| `google_event_links` | task_id (pk) → tasks, user_id, event_id, etag, task_version | unique(user_id, event_id) |
+| `oauth_states` | state_hash (pk), user_id, code_verifier (PKCE), expires_at | purged by the worker |
+
+`tasks` also has `recurrence` (RRULE subset) and `series_id` (indexed); the next occurrence's id is
+`uuid5(series_id, next_due)`, which makes completion idempotent across devices and retries.
 
 All foreign keys to `users` use `ON DELETE CASCADE`. Migrations: Alembic (`backend/alembic`).
 

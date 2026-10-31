@@ -43,11 +43,11 @@ export default defineConfig({
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
         ],
       },
-      workbox: {
-        // App shell is precached; API responses are never cached by the service worker
-        // (tasks live in IndexedDB and are synchronised explicitly).
-        navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api\//],
+      // Custom service worker: precaching for offline start + Web Push handlers (src/sw/sw.ts).
+      strategies: 'injectManifest',
+      srcDir: 'src/sw',
+      filename: 'sw.ts',
+      injectManifest: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest}'],
       },
     }),
@@ -77,6 +77,7 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
+    exclude: ['src/sw/**'],
     css: false,
     coverage: { provider: 'v8', include: ['src/**/*.{ts,tsx}'], exclude: ['src/test/**', 'src/main.tsx'] },
   },

@@ -12,8 +12,8 @@ function parseResult(): ParseResult {
     parser: 'rules',
     warnings: [],
     tasks: [
-      { title: 'Call Ana', priority: 'high', category: 'family', due_at: '2026-11-01T17:00:00Z', due_has_time: true, remind_at: null, duplicate_of: null },
-      { title: 'Buy milk', priority: 'medium', category: null, due_at: null, due_has_time: false, remind_at: null, duplicate_of: existing },
+      { title: 'Call Ana', priority: 'high', category: 'family', due_at: '2026-11-01T17:00:00Z', due_has_time: true, remind_at: null, recurrence: null, duplicate_of: null },
+      { title: 'Buy milk', priority: 'medium', category: null, due_at: null, due_has_time: false, remind_at: null, recurrence: null, duplicate_of: existing },
     ],
   }
 }

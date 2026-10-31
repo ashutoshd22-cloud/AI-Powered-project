@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router'
 import { AuthProvider, useAuth } from './app/AuthContext'
+import { AmbientProvider } from './app/backdrop'
 import { Layout } from './app/Layout'
 import { SyncProvider } from './app/SyncContext'
 import { storedTheme, useThemeSync } from './app/theme'
@@ -81,11 +82,13 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
+        <AmbientProvider>
         <AuthProvider>
           <BrowserRouter>
             <Routed />
           </BrowserRouter>
         </AuthProvider>
+        </AmbientProvider>
       </ToastProvider>
     </QueryClientProvider>
   )

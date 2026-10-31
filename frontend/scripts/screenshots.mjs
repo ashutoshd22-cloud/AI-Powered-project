@@ -61,6 +61,10 @@ await shot('/goals', 'goals.png')
 await page.emulateMedia({ colorScheme: 'dark' })
 await shot('/', 'today-dark.png')
 
+await page.evaluate(() => localStorage.setItem('lifeos:backdrop', JSON.stringify({ backdrop: 'aurora', intensity: 'subtle' })))
+await shot('/planner?view=week', 'scene-aurora.png')
+await page.evaluate(() => localStorage.removeItem('lifeos:backdrop'))
+
 await page.setViewportSize({ width: 390, height: 844 })
 await shot('/', 'mobile-today.png')
 await shot('/planner?view=month', 'mobile-planner.png')

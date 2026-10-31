@@ -86,14 +86,6 @@ def test_reminder_phrases() -> None:
     assert no_date.remind_at is None and no_date.warnings
 
 
-def test_recurrence_and_estimates() -> None:
-    r = p("gym every monday morning")
-    assert r.title == "Gym" and r.warnings and r.due_at is None
-    est = p("Review PR for 45 min tomorrow")
-    assert est.estimated_minutes == 45 and est.title == "Review PR"
-    assert p("deep work for 2 hours").estimated_minutes == 120
-
-
 def test_splitting_and_bullets() -> None:
     results = parse_text("- buy eggs\n* call Ana tomorrow\n1. pay rent; book flights", "UTC", NOW)
     assert [r.title for r in results] == ["Buy eggs", "Call Ana", "Pay rent", "Book flights"]
@@ -108,3 +100,9 @@ def test_words_that_look_like_dates_are_not_consumed() -> None:
 def test_title_falls_back_to_original_when_everything_is_metadata() -> None:
     r = p("tomorrow")
     assert r.title == "Tomorrow" and r.due_at is not None
+
+
+def test_estimates() -> None:
+    est = p("Review PR for 45 min tomorrow")
+    assert est.estimated_minutes == 45 and est.title == "Review PR"
+    assert p("deep work for 2 hours").estimated_minutes == 120

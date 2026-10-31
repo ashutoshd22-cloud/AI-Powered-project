@@ -71,6 +71,7 @@ def parse_text(body: ParseIn, user: CurrentUser, db: DbSession, llm: Llm) -> Par
                 due_at=item.due_at,
                 due_has_time=item.due_has_time,
                 remind_at=item.remind_at,
+                recurrence=item.recurrence,
                 duplicate_of=TaskOut.model_validate(dup) if dup else None,
             )
         )

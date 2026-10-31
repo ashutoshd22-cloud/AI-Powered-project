@@ -47,6 +47,22 @@ class Settings(BaseSettings):
     tombstone_retention_days: int = Field(default=90, ge=1)
     max_import_bytes: int = Field(default=1_000_000, ge=1_000)
 
+    # Web Push (notifications while the app is closed). Generate with: python -m app.cli vapid
+    vapid_private_key: str | None = None
+    vapid_subject: str = "mailto:admin@example.com"
+    # Push services the server may contact (prevents server-side request forgery via fake endpoints).
+    push_allowed_hosts: str = (
+        "fcm.googleapis.com,updates.push.services.mozilla.com,push.services.mozilla.com,"
+        "notify.windows.com,web.push.apple.com,push.apple.com"
+    )
+
+    # Google Calendar two-way sync (optional). See README "Google Calendar".
+    google_client_id: str | None = None
+    google_client_secret: str | None = None
+    # Fernet key used to encrypt third-party tokens at rest. Generate with: python -m app.cli fernet
+    token_encryption_key: str | None = None
+    google_sync_interval_seconds: int = Field(default=300, ge=60)
+
     log_level: str = "INFO"
 
     @field_validator("database_url")

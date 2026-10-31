@@ -10,7 +10,7 @@ without silently losing changes.
 |---|---|
 | ![Today, light theme](docs/screenshots/today-light.png) | ![Today, dark theme](docs/screenshots/today-dark.png) |
 
-| Weekly planner | Insights | Mobile |
+| Aurora scene | Weekly planner | Insights | Mobile |
 |---|---|---|
 | ![Planner week view](docs/screenshots/planner-week.png) | ![Insights](docs/screenshots/insights.png) | ![Mobile Today](docs/screenshots/mobile-today.png) |
 
@@ -34,7 +34,10 @@ deletion.
 - Calendar integration: private, revocable iCalendar subscription link + `.ics` import (UID de-duplication)
 - Goals with metric progress or linked-task progress; progress analytics and charts
 - Searchable activity history with pagination
-- Light, dark and system themes
+- Light, dark and system themes, plus **ambient light** whose colour follows your tasks (cyan when calm, amber when
+  something urgent is due, rose when overdue, green when all clear) or one of four original **background scenes**
+- **Recurring tasks** — “every Monday 9am”, “every 2 weeks”, weekdays, monthly, yearly or custom; completing one
+  schedules the next without ever creating duplicates
 
 **Advanced**
 - Local LLM via Ollama (any model; tested with `qwen3:4b-instruct`). The model splits free-form notes into
@@ -45,6 +48,8 @@ deletion.
 - Explainable AI prioritisation (“Overdue by 2 days · High priority · Moves a goal forward”)
 - Overdue and neglected task detection
 - Offline-first tasks: IndexedDB store + outbox, versioned sync, user-resolved conflicts, installable PWA
+- **Notifications while the app is closed** (Web Push via the service worker)
+- **Two-way Google Calendar sync** with a dedicated “LifeOS” calendar (it never sees your other calendars)
 
 **Acceptance criteria → how they are met**
 
@@ -127,6 +132,9 @@ npm run dev                          # http://localhost:5173 (proxies /api to :8
 ollama pull llama3.2                 # or any model; set OLLAMA_MODEL (e.g. qwen3:4b-instruct)
 ```
 
+After pulling new versions of LifeOS, run `alembic upgrade head` in `backend/` again — the API logs an error at
+startup if the database is behind the code.
+
 ## Configuration
 
 All settings are environment variables — see [`.env.example`](.env.example) for the full,
@@ -141,6 +149,30 @@ commented list. The most important:
 | `RUN_WORKER_IN_API` | `false` | `true` runs reminders inside the API (single process) |
 | `TRUST_PROXY_HEADERS` | `false` | Use `X-Forwarded-For` for rate limiting behind a proxy |
 | `*_RETENTION_DAYS` | 365 / 90 / 90 | Activity, read notifications, deleted-task tombstones |
+
+## Optional integrations
+
+### Notifications while LifeOS is closed (Web Push)
+1. `cd backend` then `python -m app.cli vapid` and copy the printed `VAPID_PRIVATE_KEY=…` / `VAPID_SUBJECT=…` into `.env`.
+2. Restart the API. In the app: **Settings → Browser notifications → Turn on for this device**.
+
+Push only works from the production build (the service worker isn't active in `npm run dev`) and on HTTPS or `localhost`.
+The server only sends to known push services (Google, Mozilla, Microsoft, Apple) — see `PUSH_ALLOWED_HOSTS`.
+
+### Google Calendar (two-way)
+1. In [Google Cloud Console](https://console.cloud.google.com/): create a project → **APIs & Services → Library** → enable
+   **Google Calendar API**.
+2. **OAuth consent screen**: External, add your e-mail as a test user, add the scope
+   `https://www.googleapis.com/auth/calendar.app.created`.
+3. **Credentials → Create credentials → OAuth client ID → Web application**. Authorised redirect URI:
+   `<PUBLIC_BASE_URL>/api/v1/integrations/google/callback` (locally: `http://localhost:5173/api/v1/integrations/google/callback`
+   with `PUBLIC_BASE_URL=http://localhost:5173`).
+4. Put `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `TOKEN_ENCRYPTION_KEY` (from `python -m app.cli fernet`) in `.env`,
+   restart, then **Settings → Google Calendar → Connect**.
+
+LifeOS creates a calendar named **LifeOS**. Tasks with due dates appear there; moving, renaming, deleting or adding events
+in that calendar updates LifeOS on the next sync (every 5 minutes, or **Sync now**). If both sides changed the same
+task, the most recent edit wins.
 
 ## Usage tips
 
@@ -192,9 +224,12 @@ alongside the app.
 
 ## Known limitations
 
-- Recurring tasks are not supported yet (the parser warns when it sees “every …”).
-- Calendar integration is a one-way subscription feed plus `.ics` import (no two-way Google/Microsoft sync).
-- Reminders appear in-app and as browser notifications while LifeOS is open; there is no Web Push yet.
+- Deleting one occurrence of a repeating task deletes only that occurrence; to stop a series, set Repeat to
+  “Doesn't repeat”. Completing a repeating task offline schedules the next one when the device syncs.
+- Two-way calendar sync is Google-only (Microsoft/Apple calendars get the one-way subscription feed and `.ics` import).
+  Google sync was tested against a simulated Google API; it needs your own OAuth credentials to run for real.
+- Background (push) notifications need the production build and HTTPS (or localhost); iPhone/iPad support requires
+  adding LifeOS to the Home Screen.
 - Offline editing covers tasks; goals, insights and history need a connection (read-only offline messaging is shown).
 - Rate limiting is in-memory, so it is per-instance; use a shared store (e.g. Redis) when scaling out.
 - Changing your time zone does not move existing date-only deadlines (they keep their original instant).
@@ -203,7 +238,7 @@ alongside the app.
 
 ## Future improvements
 
-Recurring tasks · Web Push notifications · two-way calendar sync (OAuth) · offline editing for goals ·
+Microsoft/Outlook two-way sync · offline editing for goals ·
 shared Redis rate limiting · multilingual parsing · task attachments · collaborative lists.
 
 ## License

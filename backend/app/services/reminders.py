@@ -12,7 +12,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.models import ActivityLog, AuthSession, Notification, SyncOp, Task, TaskStatus, User, utcnow
+from app.models import ActivityLog, AuthSession, Notification, OAuthState, SyncOp, Task, TaskStatus, User, utcnow
+from app.services import push
 from app.services.timeutil import local_to_utc, now_local
 
 log = logging.getLogger("lifeos.worker")
@@ -55,6 +56,7 @@ def dispatch_due_reminders(db: Session, now: datetime | None = None) -> int:
     if db.bind is not None and db.bind.dialect.name == "postgresql":
         stmt = stmt.with_for_update(skip_locked=True, of=Task)
     sent = 0
+    outgoing: list[push.PushMessage] = []
     for task, tz in db.execute(stmt).all():
         assert task.remind_at is not None
         created = _add_notification(
@@ -71,7 +73,14 @@ def dispatch_due_reminders(db: Session, now: datetime | None = None) -> int:
         # Not a sync-visible change, so `version`/`updated_at` stay untouched.
         task.reminder_sent_at = now
         sent += int(created)
+        if created:
+            outgoing.append(
+                push.PushMessage(
+                    task.user_id, task.title[:120], f"Reminder{_format_due(task, tz)}", f"reminder-{task.id}", "/"
+                )
+            )
     db.commit()
+    push.deliver(db, outgoing)  # after commit: a slow push service never holds DB locks
     return sent
 
 
@@ -79,6 +88,7 @@ def dispatch_daily_digests(db: Session, now: datetime | None = None) -> int:
     """Send one digest per user per local day, at or after their configured local hour."""
     now = now or utcnow()
     sent = 0
+    outgoing: list[push.PushMessage] = []
     users = db.scalars(select(User).where(User.daily_digest_enabled.is_(True)))
     for user in users:
         local_now = now_local(user.timezone, now)
@@ -106,19 +116,23 @@ def dispatch_daily_digests(db: Session, now: datetime | None = None) -> int:
         body = ", ".join(parts) + "."
         if top:
             body += " Next up: " + "; ".join(t.title for t in top)
-        sent += int(
-            _add_notification(
-                db,
-                Notification(
-                    user_id=user.id,
-                    kind="digest",
-                    title="Your plan for today",
-                    body=body[:2000],
-                    dedupe_key=f"digest:{today.isoformat()}",
-                ),
-            )
+        created = _add_notification(
+            db,
+            Notification(
+                user_id=user.id,
+                kind="digest",
+                title="Your plan for today",
+                body=body[:2000],
+                dedupe_key=f"digest:{today.isoformat()}",
+            ),
         )
+        sent += int(created)
+        if created:
+            outgoing.append(
+                push.PushMessage(user.id, "Your plan for today", body[:300], f"digest-{today.isoformat()}", "/")
+            )
     db.commit()
+    push.deliver(db, outgoing)
     return sent
 
 
@@ -137,6 +151,7 @@ def purge_expired_data(db: Session, now: datetime | None = None) -> dict[str, in
         ),
         "sync_ops": delete(SyncOp).where(SyncOp.created_at < now - timedelta(days=30)),
         "sessions": delete(AuthSession).where(AuthSession.expires_at < now),
+        "oauth_states": delete(OAuthState).where(OAuthState.expires_at < now),
     }
     results = {name: int(getattr(db.execute(stmt), "rowcount", 0) or 0) for name, stmt in statements.items()}
     db.commit()

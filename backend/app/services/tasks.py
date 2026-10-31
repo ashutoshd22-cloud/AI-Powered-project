@@ -76,6 +76,7 @@ def apply_fields(db: Session, user: User, task: Task, fields: dict[str, Any], cr
         "remind_at",
         "estimated_minutes",
         "goal_id",
+        "recurrence",
     ):
         if name not in fields:
             continue
@@ -105,6 +106,13 @@ def apply_fields(db: Session, user: User, task: Task, fields: dict[str, Any], cr
             task.completed_at = task.completed_at or utcnow()
         else:
             task.completed_at = None
+
+    if task.recurrence and task.due_at is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="A repeating task needs a due date"
+        )
+    if task.recurrence and task.series_id is None:
+        task.series_id = task.id
 
     task.dedupe_key = normalise_title(task.title)
 
@@ -142,6 +150,7 @@ def update_task(db: Session, user: User, task: Task, fields: dict[str, Any]) -> 
     is_done = task.status == TaskStatus.done.value
     if is_done and not was_done:
         activity.record(db, user.id, "task.completed", "task", f"Completed “{task.title}”", task.id)
+        schedule_next_occurrence(db, user, task)
     elif was_done and not is_done:
         activity.record(db, user.id, "task.reopened", "task", f"Reopened “{task.title}”", task.id)
     else:
@@ -163,3 +172,44 @@ def restore_task(db: Session, user: User, task: Task) -> None:
     task.updated_at = utcnow()
     task.version += 1
     activity.record(db, user.id, "task.restored", "task", f"Restored “{task.title}”", task.id)
+
+
+def schedule_next_occurrence(db: Session, user: User, task: Task) -> Task | None:
+    """Create the next task of a repeating series when one occurrence is completed.
+
+    The new id is derived from the series and the next due date, so completing the same occurrence
+    twice (reopen + complete, retried sync, two devices) can never create duplicates.
+    """
+    if not task.recurrence or task.due_at is None or task.deleted_at is not None:
+        return None
+    from app.services import recurrence  # local import keeps module dependencies one-way
+
+    try:
+        next_at = recurrence.next_due(task.recurrence, task.due_at, task.due_has_time, user.timezone, utcnow())
+    except recurrence.RecurrenceError:
+        return None
+    if next_at is None:
+        return None
+    series = task.series_id or task.id
+    next_id = uuid.uuid5(series, next_at.isoformat())
+    existing = db.get(Task, next_id)
+    if existing is not None:
+        return existing
+    fields: dict[str, Any] = {
+        "title": task.title,
+        "description": task.description,
+        "priority": task.priority,
+        "category": task.category,
+        "due_at": next_at,
+        "due_has_time": task.due_has_time,
+        "estimated_minutes": task.estimated_minutes,
+        "goal_id": task.goal_id,
+        "recurrence": task.recurrence,
+    }
+    if task.remind_at is not None:
+        # Keep the same lead time as the completed occurrence.
+        fields["remind_at"] = next_at - (task.due_at - task.remind_at)
+    nxt = create_task(db, user, fields, source=task.source, task_id=next_id)
+    nxt.series_id = series
+    db.flush()
+    return nxt

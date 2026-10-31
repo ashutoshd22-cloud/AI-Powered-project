@@ -1,12 +1,14 @@
 import { type FormEvent, useId, useState } from 'react'
 import { Link } from 'react-router'
 import { useAuth } from '../app/AuthContext'
+import { Backdrop } from '../components/Backdrop'
 import { errorMessage } from '../lib/api'
 import { browserTimeZone, supportedTimeZones } from '../lib/time'
 
 function AuthCard({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
   return (
     <main className="flex min-h-dvh items-center justify-center px-4 py-10">
+      <Backdrop mood="calm" />
       <div className="w-full max-w-sm">
         <div className="mb-6 flex items-center gap-2">
           <img src="/favicon.svg" alt="" className="size-9" />

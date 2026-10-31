@@ -1,6 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router'
+import { Backdrop } from '../components/Backdrop'
 import { ConflictCenter } from '../components/ConflictCenter'
+import { computeMood } from '../lib/mood'
+import { useAmbient } from './backdrop'
 import { NotificationBell, SyncStatus, VoiceCommand } from '../components/Header'
 import { Icon, type IconName } from '../components/Icon'
 import { useLocalTasks } from './SyncContext'
@@ -57,8 +60,10 @@ function MoreMenu() {
 
 export function Layout() {
   const user = useUser()
-  const { state } = useLocalTasks()
+  const { state, tasks } = useLocalTasks()
+  const { focus } = useAmbient()
   const location = useLocation()
+  const taskMood = useMemo(() => computeMood(tasks, user.timezone), [tasks, user.timezone])
   const main = useRef<HTMLElement>(null)
 
   useEffect(() => {
@@ -69,11 +74,12 @@ export function Layout() {
 
   return (
     <div className="min-h-dvh lg:grid lg:grid-cols-[15rem_1fr]">
+      <Backdrop mood={focus ?? taskMood} />
       <a href="#main" className="sr-only z-50 rounded bg-accent px-3 py-2 text-on-accent focus:not-sr-only focus:fixed focus:top-2 focus:left-2">
         Skip to content
       </a>
 
-      <aside className="sticky top-0 hidden h-dvh flex-col border-r border-border bg-surface px-3 py-4 lg:flex">
+      <aside className="glass sticky top-0 hidden h-dvh flex-col border-r border-border bg-surface px-3 py-4 lg:flex">
         <div className="px-2 pb-6">
           <Logo />
         </div>
@@ -103,7 +109,7 @@ export function Layout() {
       </aside>
 
       <div className="flex min-w-0 flex-col">
-        <header className="sticky top-0 z-20 flex items-center gap-1 border-b border-border bg-canvas/90 px-3 py-1 backdrop-blur sm:px-6">
+        <header className="glass sticky top-0 z-20 flex items-center gap-1 border-b border-border bg-canvas/90 px-3 py-1 backdrop-blur sm:px-6">
           <div className="lg:hidden">
             <Logo />
           </div>
@@ -130,7 +136,7 @@ export function Layout() {
 
       <nav
         aria-label="Main"
-        className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden"
+        className="glass fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden"
       >
         {NAV.filter((n) => n.mobile).map((n) => (
           <NavLink

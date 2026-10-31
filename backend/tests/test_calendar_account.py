@@ -7,7 +7,17 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
 from app import db as database
-from app.models import ActivityLog, AuthSession, Goal, Notification, Task, User
+from app.models import (
+    ActivityLog,
+    AuthSession,
+    Goal,
+    GoogleEventLink,
+    GoogleIntegration,
+    Notification,
+    PushSubscription,
+    Task,
+    User,
+)
 
 ICS = b"""BEGIN:VCALENDAR
 VERSION:2.0
@@ -117,6 +127,15 @@ def test_delete_account_removes_all_data(client: TestClient, user: dict) -> None
     assert client.get("/api/v1/auth/me").status_code == 401
     with database.SessionLocal() as db:
         uid = uuid.UUID(user["user"]["id"])
-        for model in (Task, Goal, ActivityLog, Notification, AuthSession):
+        for model in (
+            Task,
+            Goal,
+            ActivityLog,
+            Notification,
+            AuthSession,
+            PushSubscription,
+            GoogleIntegration,
+            GoogleEventLink,
+        ):
             assert db.scalar(select(func.count()).select_from(model).where(model.user_id == uid)) == 0, model
         assert db.get(User, uid) is None

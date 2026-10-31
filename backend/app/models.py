@@ -166,6 +166,9 @@ class Task(Base):
     source: Mapped[str] = mapped_column(String(20), default=TaskSource.manual.value)
     dedupe_key: Mapped[str] = mapped_column(String(200), default="")
     external_uid: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # RFC 5545 RRULE subset (see services/recurrence.py); occurrences of one series share series_id.
+    recurrence: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    series_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True, index=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
     deleted_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
@@ -188,6 +191,63 @@ class Notification(Base):
     dedupe_key: Mapped[str] = mapped_column(String(200))
     read_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class PushSubscription(Base):
+    """A browser's Web Push endpoint for a user (one row per browser/device)."""
+
+    __tablename__ = "push_subscriptions"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    endpoint: Mapped[str] = mapped_column(String(1000), unique=True)
+    p256dh: Mapped[str] = mapped_column(String(200))
+    auth: Mapped[str] = mapped_column(String(100))
+    user_agent: Mapped[str] = mapped_column(String(200), default="")
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    last_success_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+
+
+class GoogleIntegration(Base):
+    """A user's connection to Google Calendar (tokens are encrypted at rest)."""
+
+    __tablename__ = "google_integrations"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    refresh_token_enc: Mapped[str] = mapped_column(Text)
+    access_token_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
+    access_expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    calendar_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    sync_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="active")
+    last_error: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    last_synced_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class GoogleEventLink(Base):
+    """Maps a task to its Google Calendar event and remembers what was last synchronised."""
+
+    __tablename__ = "google_event_links"
+    __table_args__ = (UniqueConstraint("user_id", "event_id", name="uq_google_links_user_event"),)
+
+    task_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    event_id: Mapped[str] = mapped_column(String(255))
+    etag: Mapped[str] = mapped_column(String(255), default="")
+    task_version: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class OAuthState(Base):
+    """One-time state + PKCE verifier for an OAuth sign-in in progress."""
+
+    __tablename__ = "oauth_states"
+
+    state_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    code_verifier: Mapped[str] = mapped_column(String(128))
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime)
 
 
 class ActivityLog(Base):

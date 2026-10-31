@@ -201,6 +201,8 @@ export class SyncEngine {
       completed_at: null,
       estimated_minutes: null,
       goal_id: null,
+      recurrence: null,
+      series_id: null,
       source,
       version: 0, // 0 = not yet known to the server
       deleted_at: null,

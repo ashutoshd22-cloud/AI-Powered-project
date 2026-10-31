@@ -9,10 +9,10 @@ CI: GitHub Actions run #1 on commit `f3e86bd` (Ubuntu, Python 3.13, Node 24, Pos
 
 | Category | Status | Evidence |
 |---|---|---|
-| Functional requirements | **Pass** | 87 backend tests, 31 frontend tests, 8 E2E tests (below); manual walkthrough in the browser |
-| Backend | **Pass** | `pytest`: 87 passed, 93 % line coverage; `ruff`: clean; `mypy`: no issues (32 files) |
-| Frontend | **Pass** | `vitest`: 31 passed; `tsc -b` (strict): clean; `oxlint`: 0 errors, 3 style warnings; production build OK |
-| End-to-end | **Pass** | Playwright, desktop 1280×800 + Pixel 7: 8/8 passed locally (Edge, with the real local model enabled) and in CI (Chromium on Linux) |
+| Functional requirements | **Pass** | 133 backend tests, 39 frontend tests, 8 E2E tests (below); manual walkthrough in the browser |
+| Backend | **Pass** | `pytest`: 133 passed, 92 % line coverage; `ruff`: clean; `mypy`: no issues (32 files) |
+| Frontend | **Pass** | `vitest`: 39 passed; `tsc -b` (strict): clean; `oxlint`: 0 errors, 3 style warnings; production build OK |
+| End-to-end | **Pass** | Playwright, desktop 1280×800 + Pixel 7: 12/12 passed locally (Edge, with the real local model enabled) and in CI (Chromium on Linux) |
 | Database (SQLite) | **Pass** | Alembic `upgrade head` → `check` (models match) → `downgrade base` |
 | Database (PostgreSQL) | **Pass** | CI: full backend suite on PostgreSQL 17; `alembic upgrade head` → `check` → `downgrade base` on PostgreSQL |
 | Security | **Pass (scoped)** | Automated security tests (below); `pip-audit`: 0 known vulns; `npm audit --omit=dev`: 0; secret scan of committable files: 0 hits |
@@ -26,7 +26,7 @@ CI: GitHub Actions run #1 on commit `f3e86bd` (Ubuntu, Python 3.13, Node 24, Pos
 
 ## Test inventory
 
-**Backend (`backend/tests`, 87 tests)**
+**Backend (`backend/tests`, 133 tests)**
 - Auth: register/login/logout, validation, duplicate e-mail, CSRF enforcement, expired and tampered sessions, password change revoking other sessions, login and sign-up rate limits.
 - Tasks: CRUD, validation (empty/oversized/naive datetimes/out-of-range), 2 MB body limit, cross-user isolation, idempotent client ids, optimistic concurrency, filters/search (incl. `%`/`_` escaping), pagination, persistence after engine restart, planning views across time zones.
 - NLP: 16 parser tests — relative and absolute dates, times, priorities, categories, estimates, reminders, recurrence warning, bullets/splitting, DST gap, words that resemble dates.
@@ -37,9 +37,24 @@ CI: GitHub Actions run #1 on commit `f3e86bd` (Ubuntu, Python 3.13, Node 24, Pos
 - Calendar & account: ICS import + UID de-dup, bad/large/wrong-type files, feed lifecycle (create, public fetch, revoke), JSON/CSV export with formula-injection guard, account deletion cascades.
 - Security/misc: security headers, CORS allow/deny, generic 500 without details, auth required on all private endpoints, SPA serving with path-traversal attempts.
 
-**Frontend (`frontend/src/**/*.test.ts[x]`, 31 tests)** — API client (CSRF header, 502/503/504 → offline, validation messages, 401 event); time-zone helpers incl. DST parity with the server; planning buckets, filters, offline focus order; editor validation and zone conversion; QuickAdd (preview, duplicate unticked, double-click guard, offline fallback); sync engine (offline create, persistence across restart, conflicts both ways, in-flight rebase, remote deletes, tombstones, idempotent retry).
+**Frontend (`frontend/src/**/*.test.ts[x]`, 39 tests)** — API client (CSRF header, 502/503/504 → offline, validation messages, 401 event); time-zone helpers incl. DST parity with the server; planning buckets, filters, offline focus order; editor validation and zone conversion; QuickAdd (preview, duplicate unticked, double-click guard, offline fallback); sync engine (offline create, persistence across restart, conflicts both ways, in-flight rebase, remote deletes, tombstones, idempotent retry).
 
 **E2E (`frontend/e2e`, 4 scenarios × desktop + mobile)** — register → natural-language capture → duplicate warning → complete → reload persistence; offline capture with `context.setOffline` → sync on reconnect verified via API; planner/goals/insights/history; JSON export download and account deletion.
+
+## Release 1.1 — appearance, recurring tasks, Web Push, Google Calendar
+
+| Feature | Status | Evidence |
+|---|---|---|
+| Ambient light (mood from tasks; focus colour while editing) | **Pass** | `mood.test.ts` (5); E2E "appearance"; manual: calm → clear (green) → editing high priority (amber `#f59e0b` measured) |
+| Background scenes (Aurora, Dusk, Ocean, Nebula) + frosted panels | **Pass** | E2E scene selection + no horizontal overflow; visual check light/dark; scenes precached for offline |
+| Recurring tasks | **Pass** | `test_recurrence.py` (29: rule validation, DST wall-time, skip-ahead, parser phrases, no duplicates on re-complete/retried sync); `recurrence.test.ts` (3); E2E repeat flow |
+| Web Push while the app is closed | **Pass (real)** | `test_push.py` (9, incl. SSRF allow-list, 410 cleanup); **real round trip in Microsoft Edge**: subscribe → server push via Microsoft WNS → service worker displayed it |
+| Google Calendar two-way sync | **Pass (simulated)** | `test_google_calendar.py` (8) against an in-memory fake Google API: PKCE/state, encrypted tokens, both directions, deletes, new events, conflict (latest wins), sync-token expiry, revoked access, worker job. **Not run against real Google** (needs the owner's OAuth credentials) |
+| Migrations 0002–0004 | **Pass** | `upgrade head` → `check` → `downgrade base` on SQLite; startup warns if the database is behind |
+
+Defects found and fixed during this round: dialog showed a double scrollbar; background options lacked accessible
+names; the Google section rendered blank when its request failed (now shows the error); an outdated local database
+caused a 500 (now a clear startup message telling you to run `alembic upgrade head`).
 
 ## Local LLM evaluation
 

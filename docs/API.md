@@ -36,9 +36,9 @@ Base path: `/api/v1`. All bodies are JSON unless noted. Interactive OpenAPI docs
 |---|---|---|
 | GET | `/tasks` | Query: `q, status, priority, category, goal_id, include_done, overdue, due_from, due_to, sort (due, -due, priority, created, -created, updated, -updated), page, page_size (≤200)` |
 | GET | `/tasks/categories` | Distinct categories |
-| POST | `/tasks` | `title` required; optional `id` (client UUID → idempotent: replay returns `200` with the existing task), `description, priority, category, status, due_at, due_has_time, scheduled_for, remind_at, estimated_minutes, goal_id, source`. Omitting `remind_at` on a timed due date applies the user's default reminder; `remind_at: null` disables it |
+| POST | `/tasks` | `title` required; optional `id` (client UUID → idempotent: replay returns `200` with the existing task), `description, priority, category, status, due_at, due_has_time, scheduled_for, remind_at, estimated_minutes, goal_id, recurrence, source`. Omitting `remind_at` on a timed due date applies the user's default reminder; `remind_at: null` disables it |
 | GET | `/tasks/{id}` | `404` for other users' tasks |
-| PATCH | `/tasks/{id}` | Partial update; optional `version` → `409` with `detail.current` when stale |
+| PATCH | `/tasks/{id}` | Partial update; optional `version` → `409` with `detail.current` when stale. Setting `status: done` on a task with `recurrence` creates the next occurrence (same `series_id`) |
 | DELETE | `/tasks/{id}` | Soft delete (tombstone, synced to other devices) |
 | POST | `/tasks/{id}/restore` | Undo a delete |
 | GET | `/planning?view=day\|week\|month&date=YYYY-MM-DD` | Tasks grouped by local day (due date, else planned date) + overdue when the range includes today |
@@ -79,6 +79,23 @@ Base path: `/api/v1`. All bodies are JSON unless noted. Interactive OpenAPI docs
 | DELETE | `/calendar/token` | Revokes the feed |
 | GET | `/calendar/feed/{token}.ics` | Public iCalendar feed of tasks with due dates (no cookie needed) |
 | POST | `/calendar/import` | `multipart/form-data` field `file` (`.ics`, ≤ `MAX_IMPORT_BYTES`). Items are de-duplicated by `UID` |
+
+## Web Push
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/push/config` | `{enabled, public_key, subscriptions}` |
+| POST | `/push/subscriptions` | `{endpoint, keys: {p256dh, auth}}` from `PushSubscription.toJSON()`; endpoint must be on an allowed push service |
+| DELETE | `/push/subscriptions` | `{endpoint}` |
+| POST | `/push/test` | Sends a test notification to this user's devices |
+
+## Google Calendar
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/integrations/google` | `{configured, connected, status, last_synced_at, last_error}` |
+| POST | `/integrations/google/connect` | Returns the Google sign-in `url` (PKCE + one-time state) |
+| GET | `/integrations/google/callback` | Google redirects here; then redirects to `/settings?google=connected\|error\|cancelled` |
+| POST | `/integrations/google/sync` | Sync now → `{pulled, pushed}` |
+| DELETE | `/integrations/google` | Revoke access and stop syncing |
 
 ## Account & data
 | Method | Path | Notes |

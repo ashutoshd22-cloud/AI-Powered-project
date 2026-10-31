@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useSyncEngine } from '../app/SyncContext'
 import { useToast } from './Toast'
 import { describeDue, isOverdue } from '../lib/time'
+import { describeRule } from '../lib/recurrence'
 import { PRIORITY_LABEL } from '../lib/tasks'
 import type { Task } from '../lib/types'
 import { Icon } from './Icon'
@@ -35,7 +36,8 @@ export function TaskItem({ task, tz, onEdit, reasons, conflicted, pending, compa
   const toggle = async () => {
     await engine.updateTask(task.id, { status: done ? 'todo' : 'done' })
     if (!done) {
-      toast.show(`Completed “${task.title}”`, 'success', {
+      const repeat = task.recurrence ? ' The next one is scheduled.' : ''
+      toast.show(`Completed “${task.title}”.${repeat}`, 'success', {
         label: 'Undo',
         run: () => void engine.updateTask(task.id, { status: 'todo' }),
       })
@@ -84,6 +86,11 @@ export function TaskItem({ task, tz, onEdit, reasons, conflicted, pending, compa
             </span>
           ) : null}
           {task.category ? <span className="chip bg-accent-soft text-accent-strong">#{task.category}</span> : null}
+          {task.recurrence ? (
+            <span className="chip bg-info-soft text-ink-2" title={describeRule(task.recurrence)}>
+              <span aria-hidden>↻</span> {describeRule(task.recurrence)}
+            </span>
+          ) : null}
           {task.status === 'in_progress' ? <span className="chip bg-info-soft text-ink-2">In progress</span> : null}
           {task.remind_at && !task.reminder_sent_at && !done ? (
             <span className="inline-flex items-center" title="Reminder set">
