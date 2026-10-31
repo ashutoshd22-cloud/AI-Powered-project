@@ -167,3 +167,24 @@ def test_quick_add_creates_repeating_tasks(client: TestClient) -> None:
     assert task["recurrence"] == "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR" and task["due_has_time"]
     preview = client.post("/api/v1/ai/parse", json={"text": "pay rent monthly"}).json()["tasks"][0]
     assert preview["recurrence"] == "FREQ=MONTHLY"
+
+
+def test_repeating_task_completed_before_it_first_synced_still_continues(client: TestClient, user: dict) -> None:
+    """Regression (CI run #6): create + complete coalesced into one offline op must schedule the next one."""
+    tid = str(uuid.uuid4())
+    op = {
+        "op_id": str(uuid.uuid4()),
+        "kind": "upsert",
+        "task_id": tid,
+        "base_version": None,
+        "data": {
+            "title": "Water plants",
+            "due_at": "2099-03-01T08:00:00Z",
+            "due_has_time": True,
+            "recurrence": "FREQ=DAILY;INTERVAL=3",
+            "status": "done",
+        },
+    }
+    assert client.post("/api/v1/sync/push", json={"ops": [op]}).json()["results"][0]["status"] == "applied"
+    client.post("/api/v1/sync/push", json={"ops": [op]})  # retried: still exactly one next occurrence
+    assert _open_titles(client) == [("Water plants", "2099-03-04T08:00:00Z")]

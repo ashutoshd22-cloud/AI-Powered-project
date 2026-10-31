@@ -10,7 +10,7 @@ CI: GitHub Actions run #1 on commit `f3e86bd` (Ubuntu, Python 3.13, Node 24, Pos
 | Category | Status | Evidence |
 |---|---|---|
 | Functional requirements | **Pass** | 133 backend tests, 39 frontend tests, 8 E2E tests (below); manual walkthrough in the browser |
-| Backend | **Pass** | `pytest`: 133 passed, 92 % line coverage; `ruff`: clean; `mypy`: no issues (32 files) |
+| Backend | **Pass** | `pytest`: 134 passed, 92 % line coverage; `ruff`: clean; `mypy`: no issues (32 files) |
 | Frontend | **Pass** | `vitest`: 39 passed; `tsc -b` (strict): clean; `oxlint`: 0 errors, 3 style warnings; production build OK |
 | End-to-end | **Pass** | Playwright, desktop 1280×800 + Pixel 7: 12/12 passed locally (Edge, with the real local model enabled) and in CI (Chromium on Linux) |
 | Database (SQLite) | **Pass** | Alembic `upgrade head` → `check` (models match) → `downgrade base` |
@@ -52,7 +52,9 @@ CI: GitHub Actions run #1 on commit `f3e86bd` (Ubuntu, Python 3.13, Node 24, Pos
 | Google Calendar two-way sync | **Pass (simulated)** | `test_google_calendar.py` (8) against an in-memory fake Google API: PKCE/state, encrypted tokens, both directions, deletes, new events, conflict (latest wins), sync-token expiry, revoked access, worker job. **Not run against real Google** (needs the owner's OAuth credentials) |
 | Migrations 0002–0004 | **Pass** | `upgrade head` → `check` → `downgrade base` on SQLite; startup warns if the database is behind |
 
-Defects found and fixed during this round: dialog showed a double scrollbar; background options lacked accessible
+Defects found and fixed during this round: CI run #6 exposed that a repeating task created and completed before
+its first sync (one combined offline change) did not schedule its next occurrence — fixed in the task service, with a
+regression test proven to fail without the fix (likely also the cause of the intermittent CI run #4 failure); dialog showed a double scrollbar; background options lacked accessible
 names; the Google section rendered blank when its request failed (now shows the error); an outdated local database
 caused a 500 (now a clear startup message telling you to run `alembic upgrade head`).
 

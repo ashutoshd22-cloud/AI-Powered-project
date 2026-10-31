@@ -139,6 +139,11 @@ def create_task(
     apply_fields(db, user, task, fields, creating=True)
     db.add(task)
     activity.record(db, user.id, "task.created", "task", f"Created task “{task.title}”", task.id)
+    if task.status == TaskStatus.done.value and task.recurrence:
+        # Created already completed (e.g. a repeating task ticked off before it first synced):
+        # the series must still continue.
+        db.flush()
+        schedule_next_occurrence(db, user, task)
     return task
 
 

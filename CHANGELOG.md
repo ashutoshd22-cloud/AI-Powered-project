@@ -26,6 +26,7 @@ All notable changes to LifeOS. Versions follow [Semantic Versioning](https://sem
   your data are discarded.
 
 ### Fixed
+- A repeating task completed before it first synced (offline or on a slow connection) stopped repeating.
 - Duplicate warning could be missed when re-typing a task that had not synced yet, or while offline.
 - Dialogs showed two scrollbars; background options lacked accessible names; the Google section was blank when its
   status request failed.
