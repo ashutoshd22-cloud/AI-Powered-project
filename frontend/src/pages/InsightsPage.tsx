@@ -23,7 +23,43 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
 
 const pct = (v: number | null) => (v === null ? '—' : `${Math.round(v * 100)}%`)
 
-function AiBadge({ by }: { by: 'llm' | 'rules' }) {
+/**
+ * Shows the instant rule-based result first, then swaps in the local model's version when it
+ * arrives (a small local LLM can take several seconds).
+ */
+function useProgressive<T>(key: unknown[], path: string, query: Record<string, string>, online: boolean, aiReady: boolean) {
+  const fast = useQuery({
+    queryKey: [...key, 'rules'],
+    queryFn: () => request<T>(path, { query: { ...query, use_llm: false } }),
+    enabled: online,
+    staleTime: 60_000,
+  })
+  const ai = useQuery({
+    queryKey: [...key, 'llm'],
+    queryFn: () => request<T>(path, { query: { ...query, use_llm: true } }),
+    enabled: online && aiReady && fast.isSuccess,
+    staleTime: 10 * 60_000,
+    retry: false,
+  })
+  return {
+    data: ai.data ?? fast.data,
+    isPending: fast.isPending,
+    isError: fast.isError,
+    error: fast.error,
+    refetch: fast.refetch,
+    upgrading: ai.isFetching && !ai.data,
+  }
+}
+
+function AiBadge({ by, upgrading }: { by: 'llm' | 'rules'; upgrading?: boolean }) {
+  if (upgrading) {
+    return (
+      <span className="chip bg-surface-2 text-ink-3" role="status">
+        <Icon name="sparkles" className="size-3 animate-pulse" />
+        Local AI is writing…
+      </span>
+    )
+  }
   return (
     <span className="chip bg-surface-2 text-ink-3" title={by === 'llm' ? 'Written by your local model (Ollama)' : 'Generated from built-in rules'}>
       <Icon name="sparkles" className="size-3" />
@@ -45,25 +81,15 @@ export function InsightsPage() {
     queryFn: () => request<Overview>('/analytics/overview', { query: { days } }),
     enabled: online,
   })
-  const summary = useQuery({
-    queryKey: ['summary', period],
-    queryFn: () => request<SummaryResult>('/ai/summary', { query: { period } }),
-    enabled: online,
-    staleTime: 5 * 60_000,
-  })
-  const insights = useQuery({
-    queryKey: ['insights'],
-    queryFn: () => request<InsightsResult>('/ai/insights'),
-    enabled: online,
-    staleTime: 10 * 60_000,
-  })
+  const aiStatus = useQuery({ queryKey: ['ai-status'], queryFn: () => request<AIStatus>('/ai/status'), enabled: online, staleTime: 60_000 })
+  const aiReady = Boolean(aiStatus.data?.available && aiStatus.data.model_installed)
+  const summary = useProgressive<SummaryResult>(['summary', period], '/ai/summary', { period }, online, aiReady)
+  const insights = useProgressive<InsightsResult>(['insights'], '/ai/insights', {}, online, aiReady)
   const attention = useQuery({
     queryKey: ['attention', tasks.length],
     queryFn: () => request<{ overdue: Task[]; neglected: Task[]; neglect_days: number }>('/ai/attention'),
     enabled: online,
   })
-  const aiStatus = useQuery({ queryKey: ['ai-status'], queryFn: () => request<AIStatus>('/ai/status'), enabled: online, staleTime: 60_000 })
-
   if (!online) {
     return (
       <div className="space-y-4">
@@ -118,7 +144,7 @@ export function InsightsPage() {
             <p className="text-xs text-ink-3">
               {formatDayKey(summary.data.start, { month: 'short', day: 'numeric' })}
               {summary.data.start !== summary.data.end ? ` – ${formatDayKey(summary.data.end, { month: 'short', day: 'numeric' })}` : ''}{' '}
-              <AiBadge by={summary.data.generated_by} />
+              <AiBadge by={summary.data.generated_by} upgrading={summary.upgrading} />
             </p>
             <p className="leading-relaxed">{summary.data.narrative}</p>
             <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
@@ -148,7 +174,7 @@ export function InsightsPage() {
           <h2 id="insights-h" className="text-base font-semibold">
             Personal insights
           </h2>
-          {insights.data ? <AiBadge by={insights.data.generated_by} /> : null}
+          {insights.data ? <AiBadge by={insights.data.generated_by} upgrading={insights.upgrading} /> : null}
         </div>
         {insights.isPending ? <Spinner label="Looking for patterns" /> : null}
         {insights.isError ? <ErrorState message={errorMessage(insights.error)} onRetry={() => void insights.refetch()} /> : null}

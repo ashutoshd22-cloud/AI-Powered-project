@@ -89,7 +89,9 @@ _TIME_24 = re.compile(r"(?:\bat\s+)?\b([01]?\d|2[0-3]):([0-5]\d)\b")
 _TIME_WORD = re.compile(r"(?:\bat\s+)?\b(noon|midday|midnight)\b", re.I)
 _DAYPART = re.compile(r"\b(?:in the\s+|this\s+)?(morning|afternoon|evening)\b", re.I)
 _DAYPART_TIMES = {"morning": time(9, 0), "afternoon": time(14, 0), "evening": time(18, 0)}
-_TRAILING_CONNECTOR = re.compile(r"(?:\s+|^)(?:by|on|at|due|before|for|to|and|in)\s*$", re.I)
+_TRAILING_CONNECTOR = re.compile(
+    r"(?:\s+|^)(?:by|on|at|due|before|for|to|and|in|it'?s|it is|this is|please|pls)\s*$", re.I
+)
 _LEADING_CONNECTOR = re.compile(r"^\s*(?:to|and)\s+", re.I)
 _BULLET = re.compile(r"^\s*(?:[-*•]|\d{1,2}[.)])\s+")
 _WORD_NUMBERS = {"a": 1, "an": 1, "one": 1, "two": 2, "three": 3}

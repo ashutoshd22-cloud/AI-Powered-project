@@ -1,30 +1,32 @@
 # LifeOS — QA report
 
-Run date: 2026-10-30 · Environment: Windows 11, Python 3.14.6, Node 24.21, Microsoft Edge (Playwright channel `msedge`).
-Database during testing: **SQLite**. PostgreSQL, Docker and GitHub Actions were **not available on the test machine** —
-those rows are marked accordingly and are covered by the CI workflow, which has not been executed yet.
+Local runs: 2026-10-30/31 · Windows 11, Python 3.14.6, Node 24.21, Microsoft Edge (Playwright channel `msedge`), SQLite,
+Ollama 0.40.11 with `qwen3:4b-instruct`.
+CI: GitHub Actions run #1 on commit `f3e86bd` (Ubuntu, Python 3.13, Node 24, PostgreSQL 17) — **all 4 jobs passed**
+(backend 1m32s, frontend 29s, e2e 1m38s, docker 36s). PostgreSQL, Docker and Linux results below come from that run.
 
 ## Summary
 
 | Category | Status | Evidence |
 |---|---|---|
-| Functional requirements | **Pass** | 84 backend tests, 29 frontend tests, 8 E2E tests (below); manual walkthrough in the browser |
-| Backend | **Pass** | `pytest`: 84 passed, 93 % line coverage; `ruff`: clean; `mypy`: no issues (32 files) |
+| Functional requirements | **Pass** | 87 backend tests, 29 frontend tests, 8 E2E tests (below); manual walkthrough in the browser |
+| Backend | **Pass** | `pytest`: 87 passed, 93 % line coverage; `ruff`: clean; `mypy`: no issues (32 files) |
 | Frontend | **Pass** | `vitest`: 29 passed; `tsc -b` (strict): clean; `oxlint`: 0 errors, 3 style warnings; production build OK |
-| End-to-end | **Pass** | Playwright, desktop 1280×800 + Pixel 7: 8/8 passed |
+| End-to-end | **Pass** | Playwright, desktop 1280×800 + Pixel 7: 8/8 passed locally (Edge, with the real local model enabled) and in CI (Chromium on Linux) |
 | Database (SQLite) | **Pass** | Alembic `upgrade head` → `check` (models match) → `downgrade base` |
-| Database (PostgreSQL) | **Not verified** | Offline DDL generation succeeds (native UUID, `timestamptz`, `BIGSERIAL`, `FOR UPDATE … SKIP LOCKED`); runtime tests on PostgreSQL run only in CI |
+| Database (PostgreSQL) | **Pass** | CI: full backend suite on PostgreSQL 17; `alembic upgrade head` → `check` → `downgrade base` on PostgreSQL |
 | Security | **Pass (scoped)** | Automated security tests (below); `pip-audit`: 0 known vulns; `npm audit --omit=dev`: 0; secret scan of committable files: 0 hits |
 | Performance | **Pass (measured, not load-tested)** | Initial JS ≈ 100 KB gzip (React 81 KB + app 17 KB); pages lazy-loaded (1.5–4 KB gzip each); full backend suite 13 s |
 | Responsiveness | **Pass** | No horizontal overflow on all 9 pages at 320, 360, 390, 430, 768, 1024, 1280, 1440, 1920 px widths (scripted `scrollWidth` check) |
 | Accessibility | **Partial** | Semantic landmarks, labels, skip link, focus management, reduced motion, 44 px controls; no automated axe audit or screen-reader session was run |
 | Offline & sync | **Pass** | Unit (7 sync-engine tests), backend (6 sync tests), E2E offline test, manual: API stopped → edits, reload, conflict, resolution |
 | Documentation | **Pass** | README, ARCHITECTURE (SRS, schema, sync protocol, security), API reference, `.env.example`, this report |
-| Deployment (Docker / CI) | **Not verified** | `Dockerfile`, `docker-compose.yml`, `.github/workflows/ci.yml` written; Docker is not installed on this machine. Production mode (API serving the built SPA) was verified locally without Docker |
+| Deployment (Docker / CI) | **Pass (image)** | CI builds the image, starts it, runs migrations and checks `/api/health` and the SPA. `docker compose` (with PostgreSQL + worker) has not been run, and no live deployment exists yet |
+| Local LLM | **Pass (evaluated)** | Real model run against fixed cases — see [Local LLM evaluation](#local-llm-evaluation) |
 
 ## Test inventory
 
-**Backend (`backend/tests`, 84 tests)**
+**Backend (`backend/tests`, 87 tests)**
 - Auth: register/login/logout, validation, duplicate e-mail, CSRF enforcement, expired and tampered sessions, password change revoking other sessions, login and sign-up rate limits.
 - Tasks: CRUD, validation (empty/oversized/naive datetimes/out-of-range), 2 MB body limit, cross-user isolation, idempotent client ids, optimistic concurrency, filters/search (incl. `%`/`_` escaping), pagination, persistence after engine restart, planning views across time zones.
 - NLP: 16 parser tests — relative and absolute dates, times, priorities, categories, estimates, reminders, recurrence warning, bullets/splitting, DST gap, words that resemble dates.
@@ -38,6 +40,23 @@ those rows are marked accordingly and are covered by the CI workflow, which has 
 **Frontend (`frontend/src/**/*.test.ts[x]`, 29 tests)** — API client (CSRF header, 502/503/504 → offline, validation messages, 401 event); time-zone helpers incl. DST parity with the server; planning buckets, filters, offline focus order; editor validation and zone conversion; QuickAdd (preview, duplicate unticked, double-click guard, offline fallback); sync engine (offline create, persistence across restart, conflicts both ways, in-flight rebase, remote deletes, tombstones, idempotent retry).
 
 **E2E (`frontend/e2e`, 4 scenarios × desktop + mobile)** — register → natural-language capture → duplicate warning → complete → reload persistence; offline capture with `context.setOffline` → sync on reconnect verified via API; planner/goals/insights/history; JSON export download and account deletion.
+
+## Local LLM evaluation
+
+Model `qwen3:4b-instruct` via Ollama on the development PC; reference time Sat 2026-10-31 14:30 Asia/Kolkata. Six notes with
+known correct tasks/dates/priorities (single task with date+time+tag+priority; deadline + trailing priority; plain task;
+two tasks in one sentence; relative time with reminder; prompt-injection text).
+
+| Approach | Correct | Notes |
+|---|---|---|
+| Rules only | 5/6 | Always right on dates; could not split “dentist … **and** pick up dry cleaning tomorrow” |
+| LLM produces full JSON (first design) | 2/6 | “tomorrow” → today, “by friday” → a past Friday, “in 2 hours” → 3 days later; one 30 s timeout (fell back safely) |
+| LLM copies date words, rules resolve them | 1/6 | Dates fixed, but priorities dropped, a phantom “remind” task, and the injected text produced a “spam” task |
+| **LLM splits into verbatim pieces, rules interpret each piece (shipped)** | **6/6** | Pieces must occur verbatim in the note and cover ≥ 80 % of it, otherwise the whole note falls back to rules |
+
+Summaries and insights from the same model kept every number correct in 3/3 samples (≈3–6 s each). A number-fidelity guard now
+discards any LLM text containing figures not present in the user's data. Latency: single-task notes skip the model (instant); multi-task notes ≈10 s on this PC
+(first request includes model load); requests are bounded by a 30 s timeout and a 60 s circuit breaker when Ollama is down.
 
 ## Defects found during testing and fixed
 
@@ -53,6 +72,11 @@ those rows are marked accordingly and are covered by the CI workflow, which has 
 | 8 | Focus ring around the whole page after navigation | Unlayered `:focus-visible` beat utility class | Exclude `tabindex=-1` containers | Visual check |
 | 9 | `HEAD /` returned 405 in production mode | SPA route was GET-only | Accept HEAD | `test_serves_spa_without_path_traversal` |
 | 10 | Prioritisation could hit the AI rate limit while editing | Deterministic endpoint shared the LLM limit | Separate, higher limit unless `use_llm` | — |
+| 11 | Real model produced wrong dates, dropped priorities, followed injected text | Small LLMs are unreliable at date arithmetic and instruction isolation | LLM only segments verbatim; rules interpret; coverage guard | `test_llm_splits_note_and_rules_resolve_dates`, `test_untrustworthy_llm_output_falls_back_to_rules` |
+| 12 | Possible invented statistics in AI text | No output check | Number-fidelity guard | `test_llm_text_with_invented_numbers_is_discarded` |
+| 14 | Insights page showed a spinner for 10 s+ while the model wrote | Waited for the LLM before showing anything | Rule-based text shown instantly, AI version swapped in | E2E with real model |
+| 15 | Quick-add waited ~10 s on single-task notes | LLM consulted even when it cannot help | Only consult it for notes that may hold several tasks | `test_single_task_notes_skip_the_llm` |
+| 13 | Rule parser left “it's” in “submit tax return by friday, it's urgent” | Filler words not stripped | Strip trailing filler | Evaluation case 2 |
 
 ## Security checks performed
 
@@ -65,6 +89,5 @@ Not performed: penetration test, DAST scanner, axe/Lighthouse audits, load testi
 - `npm audit` (including dev dependencies) reports 4 **low** findings in `deepmerge` via `vite-plugin-pwa → workbox-build`; build-time only, not shipped to browsers.
 - `oxlint` reports 3 `set-state-in-effect` style warnings (form reset on dialog open); behaviour is correct.
 - Frontend unit coverage is 31 % of lines (pages are exercised by the E2E suite rather than unit tests).
-- Real LLM quality was not evaluated: Ollama was not running; the LLM path is tested with a scripted fake and mocked HTTP.
 - Voice input was not exercised with a real microphone (Web Speech API is not automatable here); its command handling is covered by API tests.
 - See README “Known limitations” for product-level limitations.

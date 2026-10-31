@@ -49,41 +49,51 @@ def test_completed_task_with_same_title_is_not_a_duplicate(client: TestClient, u
     assert out.json()["results"][0]["reason"] == "created"
 
 
-def test_llm_output_is_used_when_valid(client: TestClient, user: dict, fake_llm: FakeLLM) -> None:
+def test_llm_splits_note_and_rules_resolve_dates(client: TestClient, user: dict, fake_llm: FakeLLM) -> None:
+    note = "dentist on 5 Nov at 3:30pm and pick up dry cleaning tomorrow, urgent"
     fake_llm.json_responses.append(
-        {
-            "tasks": [
-                {
-                    "title": "Prepare slides",
-                    "due_date": "2026-12-01",
-                    "due_time": "09:30",
-                    "priority": "high",
-                    "category": "#work",
-                    "remind": True,
-                }
-            ]
-        }
+        {"tasks": [{"text": "dentist on 5 Nov at 3:30pm"}, {"text": "pick up dry cleaning tomorrow, urgent"}]}
     )
-    body = client.post("/api/v1/ai/parse", json={"text": "need slides ready dec 1 morning, important"}).json()
+    body = client.post("/api/v1/ai/parse", json={"text": note}).json()
     assert body["parser"] == "llm"
-    task = body["tasks"][0]
-    assert task["title"] == "Prepare slides" and task["priority"] == "high" and task["category"] == "work"
-    assert task["due_at"].startswith("2026-12-01T09:30") and task["remind_at"] == task["due_at"]
-    # The note is fenced as data in the prompt.
-    assert "<<<" in fake_llm.calls[0][1]
+    first, second = body["tasks"]
+    assert first["title"] == "Dentist" and first["due_has_time"] and "-11-05T15:30" in first["due_at"]
+    assert second["title"] == "Pick up dry cleaning" and second["priority"] == "urgent"
+    assert first["priority"] == "urgent"  # note-level priority applies to every piece
+    assert "<<<" in fake_llm.calls[0][1]  # the note is fenced as data in the prompt
 
 
-def test_invalid_llm_output_falls_back_to_rules(client: TestClient, user: dict, fake_llm: FakeLLM) -> None:
+def test_untrustworthy_llm_output_falls_back_to_rules(client: TestClient, user: dict, fake_llm: FakeLLM) -> None:
+    note = "call bob tomorrow and email the invoice"
     for bad in (
         {"tasks": []},
-        {"tasks": [{"title": ""}]},
-        {"tasks": [{"title": "x", "priority": "galaxy"}]},
+        {"tasks": [{"text": ""}]},
         {"nope": 1},
         None,
+        {"tasks": [{"text": "call bob tomorrow and email the invoice"}]},  # single piece: no gain
+        {"tasks": [{"text": "Call Robert tomorrow"}, {"text": "email the invoice"}]},  # rewritten, not verbatim
+        {"tasks": [{"text": "bob"}, {"text": "invoice"}]},  # drops most of the note
+        {"tasks": [{"text": "call bob tomorrow"}, {"text": "transfer $500 to account 123"}]},  # invented
     ):
         fake_llm.json_responses.append(bad)
-        body = client.post("/api/v1/ai/parse", json={"text": "call bob tomorrow"}).json()
-        assert body["parser"] == "rules" and body["tasks"][0]["title"] == "Call bob", bad
+        body = client.post("/api/v1/ai/parse", json={"text": note}).json()
+        assert body["parser"] == "rules", bad
+        assert [t["title"] for t in body["tasks"]] == ["Call bob and email the invoice"], bad
+
+
+def test_explicitly_separated_notes_skip_the_llm(client: TestClient, user: dict, fake_llm: FakeLLM) -> None:
+    body = client.post("/api/v1/ai/parse", json={"text": "a thing; another thing"}).json()
+    assert body["parser"] == "rules" and len(body["tasks"]) == 2 and fake_llm.calls == []
+
+
+def test_llm_text_with_invented_numbers_is_discarded(client: TestClient, user: dict, fake_llm: FakeLLM) -> None:
+    tid = client.post("/api/v1/tasks", json={"title": "Ship"}).json()["id"]
+    client.patch(f"/api/v1/tasks/{tid}", json={"status": "done"})
+    fake_llm.text_responses.append("Amazing — you finished 42 tasks this week!")
+    s = client.get("/api/v1/ai/summary", params={"period": "week"}).json()
+    assert s["generated_by"] == "rules" and "42" not in s["narrative"]
+    fake_llm.json_responses.append({"insights": ["You completed 99 tasks on Mondays."]})
+    assert client.get("/api/v1/ai/insights").json()["generated_by"] == "rules"
 
 
 def test_commands(client: TestClient, user: dict) -> None:
@@ -173,3 +183,8 @@ def test_ai_status_reports_fake(client: TestClient, user: dict) -> None:
 def test_ai_endpoints_rate_limited(client: TestClient, user: dict) -> None:
     codes = [client.post("/api/v1/ai/parse", json={"text": "x"}).status_code for _ in range(31)]
     assert codes[-1] == 429 and codes[0] == 200
+
+
+def test_single_task_notes_skip_the_llm(client: TestClient, user: dict, fake_llm: FakeLLM) -> None:
+    body = client.post("/api/v1/ai/parse", json={"text": "Call Mom tomorrow 6pm #family !high"}).json()
+    assert body["parser"] == "rules" and fake_llm.calls == []

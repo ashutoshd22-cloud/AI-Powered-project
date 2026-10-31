@@ -84,7 +84,9 @@ class OllamaClient:
             "model": self.model,
             "stream": False,
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-            "options": {"temperature": 0.2},
+            # Bounded output keeps latency predictable; keep_alive avoids reloading the model per request.
+            "options": {"temperature": 0.2, "num_predict": 600},
+            "keep_alive": "15m",
         }
         if fmt is not None:
             payload["format"] = fmt

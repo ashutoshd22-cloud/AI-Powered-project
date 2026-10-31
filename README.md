@@ -37,7 +37,10 @@ deletion.
 - Light, dark and system themes
 
 **Advanced**
-- Local LLM via Ollama (configurable model), with circuit-breaker and rule-based fallback
+- Local LLM via Ollama (any model; tested with `qwen3:4b-instruct`). The model splits free-form notes into
+  separate tasks using only verbatim pieces of the note; dates and priorities are always resolved by the
+  deterministic parser, and AI summaries are rejected if they contain numbers not in your data
+  ([evaluation](docs/QA_REPORT.md#local-llm-evaluation)). Circuit breaker + rule-based fallback when offline
 - Voice commands (“add call Alex tomorrow at 5pm”, “complete call Alex”, “show goals”) and dictation
 - Explainable AI prioritisation (“Overdue by 2 days · High priority · Moves a goal forward”)
 - Overdue and neglected task detection
@@ -121,7 +124,7 @@ npm run dev                          # http://localhost:5173 (proxies /api to :8
 
 ```bash
 # 3. Optional: local AI
-ollama pull llama3.2                 # then keep `ollama serve` running
+ollama pull llama3.2                 # or any model; set OLLAMA_MODEL (e.g. qwen3:4b-instruct)
 ```
 
 ## Configuration
@@ -152,7 +155,7 @@ commented list. The most important:
 ## Testing
 
 ```bash
-cd backend && pytest --cov                         # 84 tests (SQLite)
+cd backend && pytest --cov                         # 87 tests (SQLite)
 TEST_DATABASE_URL=postgresql+psycopg://… pytest    # same suite on PostgreSQL (CI does this)
 ruff check app tests && mypy app
 
@@ -205,4 +208,4 @@ shared Redis rate limiting · multilingual parsing · task attachments · collab
 
 ## License
 
-No license has been chosen yet. Add a `LICENSE` file (e.g. MIT or Apache-2.0) before publishing.
+Released under the [MIT License](LICENSE).

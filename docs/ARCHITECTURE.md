@@ -17,14 +17,14 @@ sometimes without connectivity, and who do not want their personal data sent to 
 | F1 | Registration & authentication | Argon2id password hashes, opaque server-side sessions in `HttpOnly` cookies, CSRF token, rate-limited login |
 | F2 | Tasks with priority, category, deadline, status | `tasks` table, REST + sync API |
 | F3 | Daily / weekly / monthly planning | `scheduled_for` + `due_at`; `/planning` endpoint and offline client-side planner |
-| F4 | Natural-language task creation | Rule-based parser (always available) + optional Ollama JSON parser; preview → confirm |
+| F4 | Natural-language task creation | Rule-based parser (always available); optional Ollama segmentation of multi-task notes into verbatim pieces, each resolved by the rules; preview → confirm |
 | F5 | AI productivity summaries | Deterministic stats + LLM narrative (template fallback) |
 | F6 | Smart reminders & notifications | Background worker; per-task reminders, default lead time, daily digest in the user's local time |
 | F7 | Calendar integration | Private, revocable iCalendar (`.ics`) subscription feed + `.ics` import with UID de-duplication |
 | F8 | Goal tracking & progress analytics | `goals` table (manual metric or linked-task progress), analytics endpoint |
 | F9 | Searchable activity history | `activity_logs` with text search, filters, pagination |
 | F10 | Dark & light modes | System / light / dark, persisted per user |
-| A1 | Local LLM (Ollama) | `services/llm.py`, configurable URL/model, timeouts, graceful fallback |
+| A1 | Local LLM (Ollama) | `services/llm.py`, configurable URL/model, timeouts, circuit breaker, graceful fallback; outputs validated (verbatim, coverage, number-fidelity guards) |
 | A2 | Voice commands | Browser Web Speech API → `/ai/command` intent handler |
 | A3 | AI task prioritisation | Explainable scoring (`services/prioritization.py`) + optional LLM focus note |
 | A4 | Overdue & neglected tasks | `/ai/attention` |
