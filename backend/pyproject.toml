@@ -1,6 +1,6 @@
 [project]
 name = "lifeos-backend"
-version = "1.0.0"
+version = "1.1.0"
 description = "LifeOS — personal AI operating system (API and background worker)"
 requires-python = ">=3.12"
 license = "MIT"

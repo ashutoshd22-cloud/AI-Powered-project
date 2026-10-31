@@ -1,0 +1,67 @@
+name: Release
+
+# Pushing a version tag (e.g. `git tag v1.1.0 && git push origin v1.1.0`) publishes the Docker image to
+# GitHub Container Registry and creates a GitHub Release with that version's CHANGELOG section.
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/lifeos
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          docker build \
+            --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+            --label "org.opencontainers.image.version=${VERSION}" \
+            --label "org.opencontainers.image.licenses=MIT" \
+            --label "org.opencontainers.image.description=LifeOS - personal AI operating system (API + web app)" \
+            -t "${IMAGE}:${VERSION}" -t "${IMAGE}:latest" .
+      - name: Smoke test
+        run: |
+          # Exactly the command shown in the release notes (named volume, non-root user).
+          docker run -d --name lifeos -p 8000:8000 -e DATABASE_URL=sqlite:////data/lifeos.db -v lifeos:/data "${IMAGE}:latest"
+          for i in $(seq 1 30); do curl -fsS http://localhost:8000/api/health && break; sleep 2; done
+          curl -fsS http://localhost:8000/ | grep -q '<div id="root">' || { docker logs lifeos; exit 1; }
+      - name: Publish
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker push "${IMAGE}:${GITHUB_REF_NAME#v}"
+          docker push "${IMAGE}:latest"
+
+  release:
+    runs-on: ubuntu-latest
+    needs: image
+    steps:
+      - uses: actions/checkout@v4
+      - name: Release notes from CHANGELOG
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v v="$VERSION" '
+            index($0, "## [" v "]") == 1 {on=1; next}
+            on && substr($0, 1, 4) == "## [" {exit}
+            on {print}
+          ' CHANGELOG.md > notes.md
+          test -s notes.md || { echo "No CHANGELOG section for $VERSION"; exit 1; }
+          {
+            echo
+            echo "### Run it"
+            echo '```bash'
+            echo "docker run -p 8000:8000 -e DATABASE_URL=sqlite:////data/lifeos.db -v lifeos:/data ${IMAGE}:${VERSION}"
+            echo '```'
+            echo "Then open http://localhost:8000. For PostgreSQL, the worker and local AI use \`docker compose\` (see README)."
+          } >> notes.md
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$GITHUB_REF_NAME" --title "LifeOS $GITHUB_REF_NAME" --notes-file notes.md --verify-tag

@@ -200,6 +200,15 @@ PW_CHANNEL=msedge npm run test:e2e                 # or use an installed Edge/Ch
 
 ## Deployment
 
+### Quickest: the published image
+```bash
+docker run -p 8000:8000 -e DATABASE_URL=sqlite:////data/lifeos.db -v lifeos:/data ghcr.io/ashutoshd22-cloud/lifeos:latest
+```
+Open http://localhost:8000. Versions are listed under [Releases](https://github.com/ashutoshd22-cloud/AI-Powered-project/releases);
+see [CHANGELOG.md](CHANGELOG.md). Maintainers publish a new version by pushing a tag (`git tag v1.2.0 && git push origin v1.2.0`).
+
+### Full stack with Docker Compose
+
 ```bash
 cp .env.example .env          # set POSTGRES_PASSWORD, PUBLIC_BASE_URL, COOKIE_SECURE=true (HTTPS)
 docker compose up -d --build  # PostgreSQL + app (API + web) + worker on :8000

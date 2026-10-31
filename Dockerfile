@@ -25,7 +25,8 @@ RUN pip install -r requirements.txt
 COPY backend/ ./
 COPY --from=web /web/dist ./static
 
-RUN useradd --system --uid 10001 --home /app lifeos && chown -R lifeos /app
+# /data is where a SQLite database can live on a mounted volume (owned by the non-root user).
+RUN useradd --system --uid 10001 --home /app lifeos && mkdir -p /data && chown -R lifeos /app /data
 USER lifeos
 
 EXPOSE 8000

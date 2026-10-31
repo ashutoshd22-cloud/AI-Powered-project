@@ -82,7 +82,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="LifeOS API",
-        version="1.0.0",
+        version="1.1.0",
         lifespan=lifespan,
         docs_url="/api/docs" if settings.enable_docs else None,
         redoc_url=None,
