@@ -80,6 +80,21 @@ export function localFocus(tasks: Task[], now = new Date()): Task[] {
   return tasks.filter((t) => t.status !== 'done').sort((a, b) => score(b) - score(a) || compareTasks(a, b))
 }
 
+/** Same normalisation as the server's `normalise_title` (case-, punctuation- and space-insensitive). */
+export function normaliseTitle(title: string): string {
+  return title
+    .toLocaleLowerCase()
+    .replace(/[^\p{L}\p{N}_\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+export function findOpenDuplicate(tasks: Task[], title: string): Task | null {
+  const key = normaliseTitle(title)
+  if (!key) return null
+  return tasks.find((t) => t.status !== 'done' && t.deleted_at === null && normaliseTitle(t.title) === key) ?? null
+}
+
 export function categoriesOf(tasks: Task[]): string[] {
   return [...new Set(tasks.map((t) => t.category).filter((c): c is string => Boolean(c)))].sort((a, b) => a.localeCompare(b))
 }

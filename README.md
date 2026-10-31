@@ -160,7 +160,7 @@ TEST_DATABASE_URL=postgresql+psycopg://… pytest    # same suite on PostgreSQL 
 ruff check app tests && mypy app
 
 cd frontend
-npm run typecheck && npm run lint && npm test      # 29 unit/component tests
+npm run typecheck && npm run lint && npm test      # 31 unit/component tests
 # E2E: start the API (port 8000) first, with REGISTER_LIMIT_PER_HOUR raised for repeated sign-ups
 npx playwright install chromium && npm run test:e2e
 PW_CHANNEL=msedge npm run test:e2e                 # or use an installed Edge/Chrome

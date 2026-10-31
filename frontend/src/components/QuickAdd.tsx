@@ -2,7 +2,7 @@ import { type FormEvent, useId, useState } from 'react'
 import { useLocalTasks, useSyncEngine } from '../app/SyncContext'
 import { NetworkError, errorMessage, request } from '../lib/api'
 import { useSpeech } from '../lib/speech'
-import { PRIORITY_LABEL } from '../lib/tasks'
+import { PRIORITY_LABEL, findOpenDuplicate } from '../lib/tasks'
 import { describeDue } from '../lib/time'
 import type { ParseResult, ParsedTask, TaskFields } from '../lib/types'
 import { Icon } from './Icon'
@@ -24,7 +24,7 @@ interface PreviewItem extends ParsedTask {
  */
 export function QuickAdd({ tz, defaults }: Props) {
   const engine = useSyncEngine()
-  const { state } = useLocalTasks()
+  const { state, tasks } = useLocalTasks()
   const toast = useToast()
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
@@ -32,7 +32,15 @@ export function QuickAdd({ tz, defaults }: Props) {
   const inputId = useId()
   const speech = useSpeech((spoken) => setText((t) => (t ? `${t} ${spoken}` : spoken)))
 
-  const addPlain = async (title: string) => {
+  const addPlain = async (title: string, allowDuplicate = false) => {
+    const duplicate = findOpenDuplicate(tasks, title)
+    if (duplicate && !allowDuplicate) {
+      toast.show(`You already have an open task “${duplicate.title}”. Nothing was added.`, 'info', {
+        label: 'Add anyway',
+        run: () => void addPlain(title, true),
+      })
+      return
+    }
     await engine.createTask({ title: title.slice(0, 200), ...defaults })
     toast.show('Added. Smart parsing of dates needs a connection — edit the task to add details.', 'info')
     setText('')
@@ -54,7 +62,11 @@ export function QuickAdd({ tz, defaults }: Props) {
     try {
       const res = await request<ParseResult>('/ai/parse', { method: 'POST', body: { text: value } })
       setPreview({
-        items: res.tasks.map((t) => ({ ...t, include: !t.duplicate_of })),
+        // The server only knows synced tasks; also check this device's unsynced/offline ones.
+        items: res.tasks.map((t) => {
+          const duplicate = t.duplicate_of ?? findOpenDuplicate(tasks, t.title)
+          return { ...t, duplicate_of: duplicate, include: !duplicate }
+        }),
         parser: res.parser,
         warnings: res.warnings,
       })

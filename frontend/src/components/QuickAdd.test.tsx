@@ -67,3 +67,33 @@ describe('QuickAdd', () => {
     engine.stop()
   })
 })
+
+describe('QuickAdd duplicate protection for tasks not yet on the server (regression)', () => {
+  it('flags an unsynced local task as a duplicate even when the server does not', async () => {
+    const result = parseResult()
+    result.tasks = [{ ...result.tasks[1], title: 'Pay rent!', duplicate_of: null }]
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(result)))
+    const engine = await makeEngine()
+    await engine.createTask({ title: 'pay  RENT' }) // still only on this device
+    renderWithProviders(<QuickAdd tz="UTC" />, engine)
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Add a task in plain language'), 'Pay rent!')
+    await user.click(screen.getByRole('button', { name: 'Add task' }))
+    expect(await screen.findByText(/You already have an open task “pay\s+RENT”/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Add 0 tasks' })).toBeInTheDocument()
+    engine.stop()
+  })
+
+  it('does not add an offline duplicate unless the user confirms', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ detail: 'API unavailable' }, 502)))
+    const engine = await makeEngine()
+    await engine.createTask({ title: 'Water plants' })
+    renderWithProviders(<QuickAdd tz="UTC" />, engine)
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Add a task in plain language'), 'water plants')
+    await user.click(screen.getByRole('button', { name: 'Add task' }))
+    await user.click(await screen.findByRole('button', { name: 'Add anyway' }))
+    await waitFor(() => expect(engine.getSnapshot().tasks).toHaveLength(2))
+    engine.stop()
+  })
+})

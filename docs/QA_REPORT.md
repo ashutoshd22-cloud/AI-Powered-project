@@ -9,9 +9,9 @@ CI: GitHub Actions run #1 on commit `f3e86bd` (Ubuntu, Python 3.13, Node 24, Pos
 
 | Category | Status | Evidence |
 |---|---|---|
-| Functional requirements | **Pass** | 87 backend tests, 29 frontend tests, 8 E2E tests (below); manual walkthrough in the browser |
+| Functional requirements | **Pass** | 87 backend tests, 31 frontend tests, 8 E2E tests (below); manual walkthrough in the browser |
 | Backend | **Pass** | `pytest`: 87 passed, 93 % line coverage; `ruff`: clean; `mypy`: no issues (32 files) |
-| Frontend | **Pass** | `vitest`: 29 passed; `tsc -b` (strict): clean; `oxlint`: 0 errors, 3 style warnings; production build OK |
+| Frontend | **Pass** | `vitest`: 31 passed; `tsc -b` (strict): clean; `oxlint`: 0 errors, 3 style warnings; production build OK |
 | End-to-end | **Pass** | Playwright, desktop 1280×800 + Pixel 7: 8/8 passed locally (Edge, with the real local model enabled) and in CI (Chromium on Linux) |
 | Database (SQLite) | **Pass** | Alembic `upgrade head` → `check` (models match) → `downgrade base` |
 | Database (PostgreSQL) | **Pass** | CI: full backend suite on PostgreSQL 17; `alembic upgrade head` → `check` → `downgrade base` on PostgreSQL |
@@ -37,7 +37,7 @@ CI: GitHub Actions run #1 on commit `f3e86bd` (Ubuntu, Python 3.13, Node 24, Pos
 - Calendar & account: ICS import + UID de-dup, bad/large/wrong-type files, feed lifecycle (create, public fetch, revoke), JSON/CSV export with formula-injection guard, account deletion cascades.
 - Security/misc: security headers, CORS allow/deny, generic 500 without details, auth required on all private endpoints, SPA serving with path-traversal attempts.
 
-**Frontend (`frontend/src/**/*.test.ts[x]`, 29 tests)** — API client (CSRF header, 502/503/504 → offline, validation messages, 401 event); time-zone helpers incl. DST parity with the server; planning buckets, filters, offline focus order; editor validation and zone conversion; QuickAdd (preview, duplicate unticked, double-click guard, offline fallback); sync engine (offline create, persistence across restart, conflicts both ways, in-flight rebase, remote deletes, tombstones, idempotent retry).
+**Frontend (`frontend/src/**/*.test.ts[x]`, 31 tests)** — API client (CSRF header, 502/503/504 → offline, validation messages, 401 event); time-zone helpers incl. DST parity with the server; planning buckets, filters, offline focus order; editor validation and zone conversion; QuickAdd (preview, duplicate unticked, double-click guard, offline fallback); sync engine (offline create, persistence across restart, conflicts both ways, in-flight rebase, remote deletes, tombstones, idempotent retry).
 
 **E2E (`frontend/e2e`, 4 scenarios × desktop + mobile)** — register → natural-language capture → duplicate warning → complete → reload persistence; offline capture with `context.setOffline` → sync on reconnect verified via API; planner/goals/insights/history; JSON export download and account deletion.
 
@@ -76,6 +76,7 @@ discards any LLM text containing figures not present in the user's data. Latency
 | 12 | Possible invented statistics in AI text | No output check | Number-fidelity guard | `test_llm_text_with_invented_numbers_is_discarded` |
 | 14 | Insights page showed a spinner for 10 s+ while the model wrote | Waited for the LLM before showing anything | Rule-based text shown instantly, AI version swapped in | E2E with real model |
 | 15 | Quick-add waited ~10 s on single-task notes | LLM consulted even when it cannot help | Only consult it for notes that may hold several tasks | `test_single_task_notes_skip_the_llm` |
+| 16 | CI run #2: duplicate warning missing when re-typing a task right after adding it (also offline) | Duplicate check ran only on the server, which had not received the unsynced task yet | Preview and offline quick-add also check this device's tasks (same normalisation as the server) | 2 tests in `QuickAdd.test.tsx`; E2E 24/24 over 3 repeats |
 | 13 | Rule parser left “it's” in “submit tax return by friday, it's urgent” | Filler words not stripped | Strip trailing filler | Evaluation case 2 |
 
 ## Security checks performed
