@@ -12,10 +12,13 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   fullyParallel: false,
   retries: process.env.CI ? 1 : 0,
-  reporter: [['list']],
+  // In CI, failures also become GitHub annotations (readable without opening the job log).
+  reporter: process.env.CI ? [['list'], ['github']] : [['list']],
   use: {
     baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:5173',
     trace: 'retain-on-failure',
+    // Lets you reproduce CI (UTC) or other zones locally: PW_TZ=UTC npx playwright test
+    timezoneId: process.env.PW_TZ || undefined,
     screenshot: 'only-on-failure',
   },
   projects: [
